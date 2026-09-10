@@ -12,7 +12,7 @@ func TestBuiltinCatalogContainsRequestedProtocols(t *testing.T) {
 	registry := Builtins()
 	expected := []string{
 		"chat-completion", "openai-response", "claude-api",
-		"openai-image", "grok-image", "volcengine-ark-image", "volcengine-jimeng-image", "gemini-image",
+		"openai-image", "openai-image-async", "grok-image", "volcengine-ark-image", "volcengine-jimeng-image", "gemini-image",
 		"newapi", "newapi-channel-2", "xai-video", "volcengine-ark-video", "volcengine-jimeng-video", "gemini-veo", "novita-video", "minimax-video", "agnes-video",
 	}
 	for _, id := range expected {
@@ -121,6 +121,7 @@ func TestImageAndVideoAdaptersMapProviderShapes(t *testing.T) {
 		request        GenerationRequest
 	}{
 		{"openai-image", "/v1/images/generations", "", GenerationRequest{Model: "dall-e-test", Prompt: "a still", ImageCount: 2, AspectRatio: "1024x1024"}},
+		{"openai-image-async", "/v1/images/generations", "/v1/tasks/video-1", GenerationRequest{Model: "dall-e-test", Prompt: "a still", ImageCount: 2, AspectRatio: "1024x1024"}},
 		{"grok-image", "/v1/images/generations", "", GenerationRequest{Model: "grok-imagine-image", Prompt: "a still", AspectRatio: "16:9"}},
 		{"volcengine-ark-image", "/api/v3/images/generations", "", GenerationRequest{Model: "doubao-image", Prompt: "a still"}},
 		{"volcengine-jimeng-image", "/CVSync2AsyncSubmitTask", "/CVSync2AsyncGetResult", GenerationRequest{Model: "jimeng_t2i_v40", Prompt: "a still"}},
@@ -158,6 +159,25 @@ func TestImageAndVideoAdaptersMapProviderShapes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAsyncOpenAIImageMapsReferencesToImageURLs(t *testing.T) {
+	adapter, ok := Builtins().Get("openai-image-async")
+	if !ok {
+		t.Fatal("adapter missing")
+	}
+	spec, err := adapter.BuildCreate(context.Background(), RequestContext{Request: GenerationRequest{
+		Model: "gpt-image-2", Prompt: "keep the subject",
+		Images: []MediaReference{{URL: "https://cdn.example/reference.png", Role: "edit_source"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := spec.Body.(map[string]any)
+	images, ok := body["image_urls"].([]string)
+	if !ok || len(images) != 1 || images[0] != "https://cdn.example/reference.png" {
+		t.Fatalf("image_urls = %#v", body["image_urls"])
 	}
 }
 
@@ -519,6 +539,7 @@ func TestAsyncMediaPollKeepsResultKind(t *testing.T) {
 	cases := []struct {
 		id, payload, want string
 	}{
+		{"openai-image-async", `{"status":"completed","data":[{"url":"https://cdn.example/image.png"}]}`, "image"},
 		{"volcengine-jimeng-image", `{"data":{"status":"completed","images":["https://cdn.example/image.png"]}}`, "image"},
 		{"async-audio", `{"task":{"id":"audio-1","status":"completed","audio_url":"https://cdn.example/audio.mp3"}}`, "audio"},
 		{"minimax-video", `{"task":{"id":"video-1","status":"succeeded","content":{"url":"https://cdn.example/video.mp4"}}}`, "video"},
@@ -548,6 +569,45 @@ func TestAsyncMediaPollKeepsResultKind(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAsyncImageCreateAcceptsGatewayDataArrayTask(t *testing.T) {
+	adapter, _ := Builtins().Get("openai-image-async")
+	created, err := adapter.ParseCreate(context.Background(), []byte(`{"code":200,"data":[{"status":"submitted","task_id":"task-1"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.TaskID != "task-1" || created.Status != StatusPending {
+		t.Fatalf("created = %#v", created)
+	}
+}
+
+func TestAsyncImagePollAcceptsGatewayNestedResultImages(t *testing.T) {
+	adapter, _ := Builtins().Get("openai-image-async")
+	polled, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "task-1"}, []byte(`{
+		"code": 200,
+		"data": {
+			"id": "task-1",
+			"progress": 100,
+			"result": {
+				"images": [
+					{
+						"expires_at": 1789034840,
+						"url": [
+							"https://cdn.example/result.png"
+						]
+					}
+				]
+			},
+			"status": "completed"
+		}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if polled.Status != StatusSucceeded || polled.Result == nil || len(polled.Result.Images) != 1 || polled.Result.Images[0].URL != "https://cdn.example/result.png" {
+		t.Fatalf("polled = %#v", polled)
 	}
 }
 

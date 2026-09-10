@@ -45,12 +45,6 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                     <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.58} />
                     <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0.34} />
                 </linearGradient>
-                {/* 流光头部的软化渐变：两端透明、中间亮，避免短划线看起来是硬色块 */}
-                <linearGradient id={`${gradientId}-comet`} x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor={theme.accent.primary} stopOpacity={0} />
-                    <stop offset="45%" stopColor={theme.accent.primary} stopOpacity={0.95} />
-                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0} />
-                </linearGradient>
             </defs> : null}
             {/* 光晕：只在强调态渲染。blur 是 filter，成本随线条数量线性上升，
                 常态几十条线全开会明显掉帧，所以刻意只给悬停/选中的那一条。
@@ -124,19 +118,21 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 strokeLinejoin="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
-            {/* 流光：一小段高亮沿路径跑。周期与虚线流动刻意不同（2.1s vs 1.25s），
-                两者错拍才像有光在走；同频会锁成一条整体平移的虚线。 */}
-            {showEmphasis ? <path
+            {/* Nested dashes share a leading edge, building a fading tail along the curve. */}
+            {showEmphasis ? [24, 20, 16, 12, 8, 4].map((length) => <path
+                key={length}
                 className="canvas-connection-comet"
                 d={pathD}
-                stroke={`url(#${gradientId}-comet)`}
-                strokeWidth="2.6"
+                pathLength={100}
+                stroke={theme.accent.primary}
+                strokeOpacity={0.14}
+                strokeWidth="2.4"
                 vectorEffect="non-scaling-stroke"
-                strokeDasharray="16 118"
+                strokeDasharray={`${length} ${100 - length}`}
                 fill="none"
                 strokeLinecap="round"
-                style={{ pointerEvents: "none" }}
-            /> : null}
+                style={{ pointerEvents: "none", animationDelay: `${-(24 - length) * 0.032}s` }}
+            />) : null}
         </g>
     );
 }, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);

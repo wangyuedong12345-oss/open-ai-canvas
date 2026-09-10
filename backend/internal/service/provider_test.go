@@ -483,6 +483,130 @@ func TestRunAgentToolTaskFallsBackToolChoice(t *testing.T) {
 	}
 }
 
+func TestRunDeclarativeAgentTaskParsesChatCompletionSSE(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request body: %v", err)
+		}
+		if stream, ok := body["stream"].(bool); !ok || !stream {
+			t.Fatalf("stream body field = %#v", body["stream"])
+		}
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"正在检查","tool_calls":[{"index":0,"id":"call-1","function":{"name":"canvas_get_context","arguments":"{}"}}]}}]}
+
+data: [DONE]
+
+`))
+	}))
+	defer server.Close()
+
+	var deltas strings.Builder
+	result, err := runDeclarativeAgentTask(context.Background(), canvasGenerationInput{
+		Config: providerConfig{BaseURL: server.URL, APIKey: "key", Model: "deepseek-v4-flash", InterfaceType: string(model.ChannelInterfaceChatCompletion), AllowLocalChannel: true},
+		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{
+			"messages": []interface{}{map[string]interface{}{"role": "user", "content": "检查节点连线"}},
+			"tools":    []interface{}{},
+			"stream":   true,
+		}},
+		OnTextDelta: func(delta string) { deltas.WriteString(delta) },
+	}, declarativeAgentTestAdapter{})
+	if err != nil {
+		t.Fatalf("runDeclarativeAgentTask() error = %v", err)
+	}
+	if result["text"] != "正在检查" || deltas.String() != "正在检查" {
+		t.Fatalf("text = %v, deltas = %q", result["text"], deltas.String())
+	}
+	calls, _ := result["toolCalls"].([]interface{})
+	if len(calls) != 1 {
+		t.Fatalf("toolCalls = %#v", result["toolCalls"])
+	}
+	call, _ := calls[0].(map[string]interface{})
+	function, _ := call["function"].(map[string]interface{})
+	if call["id"] != "call-1" || function["name"] != "canvas_get_context" || function["arguments"] != "{}" {
+		t.Fatalf("tool call = %#v", call)
+	}
+}
+
+func TestRunDeclarativeAgentTaskStopsAtDoneWithoutEOF(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"你好"}}]}
+
+data: [DONE]
+
+`))
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		select {
+		case <-r.Context().Done():
+		case <-time.After(2 * time.Second):
+		}
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	startedAt := time.Now()
+	result, err := runDeclarativeAgentTask(ctx, canvasGenerationInput{
+		Config: providerConfig{BaseURL: server.URL, APIKey: "key", Model: "deepseek-v4-flash", InterfaceType: string(model.ChannelInterfaceChatCompletion), AllowLocalChannel: true},
+		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{
+			"messages": []interface{}{map[string]interface{}{"role": "user", "content": "你好"}},
+			"tools":    []interface{}{},
+			"stream":   true,
+		}},
+	}, declarativeAgentTestAdapter{})
+	if err != nil {
+		t.Fatalf("runDeclarativeAgentTask() error = %v", err)
+	}
+	if elapsed := time.Since(startedAt); elapsed >= 500*time.Millisecond {
+		t.Fatalf("runDeclarativeAgentTask() returned after %s, want before context deadline", elapsed)
+	}
+	if result["text"] != "你好" {
+		t.Fatalf("text = %v", result["text"])
+	}
+}
+
+type declarativeAgentTestAdapter struct{}
+
+func (declarativeAgentTestAdapter) Metadata() protocol.Metadata {
+	return protocol.Metadata{ID: string(model.ChannelInterfaceChatCompletion)}
+}
+
+func (declarativeAgentTestAdapter) BuildCreate(context.Context, protocol.RequestContext) (protocol.RequestSpec, error) {
+	return protocol.RequestSpec{}, errors.New("unexpected BuildCreate")
+}
+
+func (declarativeAgentTestAdapter) ParseCreate(context.Context, []byte) (protocol.CreateResult, error) {
+	return protocol.CreateResult{}, errors.New("unexpected ParseCreate")
+}
+
+func (declarativeAgentTestAdapter) BuildPoll(context.Context, protocol.PollContext) (protocol.RequestSpec, error) {
+	return protocol.RequestSpec{}, errors.New("unexpected BuildPoll")
+}
+
+func (declarativeAgentTestAdapter) ParsePoll(context.Context, protocol.PollContext, []byte) (protocol.PollResult, error) {
+	return protocol.PollResult{}, errors.New("unexpected ParsePoll")
+}
+
+func (declarativeAgentTestAdapter) BuildCancel(context.Context, protocol.PollContext) (protocol.RequestSpec, error) {
+	return protocol.RequestSpec{}, errors.New("unexpected BuildCancel")
+}
+
+func (declarativeAgentTestAdapter) BuildAgent(_ context.Context, c protocol.AgentRequestContext) (protocol.RequestSpec, error) {
+	request, _ := c.Request["chatCompletion"].(map[string]interface{})
+	body := cloneStringAnyMap(request)
+	body["model"] = c.Model
+	return protocol.RequestSpec{Method: http.MethodPost, Path: "/chat/completions", ContentType: "application/json", Body: body}, nil
+}
+
+func (declarativeAgentTestAdapter) ParseAgent(context.Context, []byte) (protocol.AgentResult, error) {
+	return protocol.AgentResult{}, errors.New("unexpected ParseAgent")
+}
+
 func TestPostStreamingTextSetsStreamHeaders(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

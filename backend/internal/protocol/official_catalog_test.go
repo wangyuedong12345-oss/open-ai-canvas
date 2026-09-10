@@ -552,6 +552,34 @@ func officialPackageAdapter(t *testing.T, packageName, providerID string) Adapte
 	return nil
 }
 
+func TestOfficialOpenAIImagesAsyncParsesAPIBNestedArrayURL(t *testing.T) {
+	adapter := officialPackageAdapter(t, "openai-images-async.yingce-plugin", "openai-image-async")
+	state, err := adapter.ParsePoll(context.Background(), PollContext{TaskID: "task-1"}, []byte(`{
+		"code": 200,
+		"data": {
+			"id": "task-1",
+			"progress": 100,
+			"result": {
+				"images": [
+					{
+						"expires_at": 1789035412,
+						"url": [
+							"https://cdn.example/result.png"
+						]
+					}
+				]
+			},
+			"status": "completed"
+		}
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != StatusSucceeded || state.Result == nil || len(state.Result.Images) != 1 || state.Result.Images[0].URL != "https://cdn.example/result.png" {
+		t.Fatalf("state = %#v", state)
+	}
+}
+
 func manifestTestBody(t *testing.T, spec RequestSpec) map[string]any {
 	t.Helper()
 	data, err := json.Marshal(spec.Body)

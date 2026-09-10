@@ -555,14 +555,23 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 	if err != nil {
 		return nil, err
 	}
-	body, err := executeProtocolRequest(ctx, input.Config, spec)
+	parser := newStreamingAgentParser(agentStreamProtocol(input.Config.InterfaceType), input.OnTextDelta)
+	body, mimeType, err := executeProtocolBinaryRequestWithConsumerUntil(ctx, input.Config, spec, parser.consume, parser.doneReading)
 	if err != nil {
 		return nil, err
+	}
+	if strings.Contains(strings.ToLower(mimeType), "event-stream") {
+		parser.flush()
+		return parser.result()
 	}
 	parsed, err := adapter.ParseAgent(ctx, body)
 	if err != nil {
 		return nil, err
 	}
+	return protocolAgentResult(parsed)
+}
+
+func protocolAgentResult(parsed protocol.AgentResult) (map[string]interface{}, error) {
 	result := map[string]interface{}{"mode": "text", "text": parsed.Text, "toolCalls": []interface{}{}}
 	if parsed.Reasoning != "" {
 		result["reasoning"] = parsed.Reasoning
@@ -584,6 +593,17 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		return nil, errors.New("声明式 Agent 接口没有返回内容")
 	}
 	return result, nil
+}
+
+func agentStreamProtocol(interfaceType string) string {
+	switch strings.TrimSpace(interfaceType) {
+	case string(model.ChannelInterfaceOpenAIResponse):
+		return "responses"
+	case string(model.ChannelInterfaceClaudeAPI):
+		return "claude-api"
+	default:
+		return "chat-completion"
+	}
 }
 
 func claudeAgentBody(request map[string]interface{}) map[string]interface{} {
@@ -790,7 +810,7 @@ func postStreamingAgent(ctx context.Context, config providerConfig, path string,
 		}
 	}
 	parser := newStreamingAgentParser(protocol, onDelta)
-	data, mimeType, err := postStreamingBinary(ctx, config, path, body, parser.consume)
+	data, mimeType, err := postStreamingBinaryUntil(ctx, config, path, body, parser.consume, parser.doneReading)
 	if err != nil {
 		return nil, err
 	}
@@ -819,6 +839,7 @@ type streamingAgentParser struct {
 	toolCalls    map[int]*streamingAgentToolCall
 	toolCallByID map[string]int
 	completed    map[string]interface{}
+	done         bool
 	err          error
 	emit         func(string)
 }
@@ -840,6 +861,10 @@ func (p *streamingAgentParser) flush() {
 		return
 	}
 	p.consumeFrames(true)
+}
+
+func (p *streamingAgentParser) doneReading() bool {
+	return p != nil && (p.done || p.err != nil)
 }
 
 func (p *streamingAgentParser) consumeFrames(flush bool) {
@@ -869,7 +894,11 @@ func (p *streamingAgentParser) consumeFrame(frame string) {
 		}
 	}
 	raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
-	if raw == "" || raw == "[DONE]" {
+	if raw == "" {
+		return
+	}
+	if raw == "[DONE]" {
+		p.done = true
 		return
 	}
 	var payload map[string]interface{}
@@ -900,6 +929,7 @@ func (p *streamingAgentParser) consumeResponsesEvent(eventName string, payload m
 		p.reasoning.WriteString(stringField(payload, "delta"))
 	case "response.completed":
 		p.completed, _ = payload["response"].(map[string]interface{})
+		p.done = true
 	case "response.output_item.added":
 		item, _ := payload["item"].(map[string]interface{})
 		if stringField(item, "type") == "function_call" {
@@ -980,6 +1010,8 @@ func (p *streamingAgentParser) consumeClaudeEvent(payload map[string]interface{}
 		if stringField(delta, "type") == "input_json_delta" {
 			p.toolCall(index).arguments += stringField(delta, "partial_json")
 		}
+	case "message_stop":
+		p.done = true
 	case "error":
 		errValue, _ := payload["error"].(map[string]interface{})
 		p.err = errors.New(defaultString(stringField(errValue, "message"), "Claude 上游返回失败"))
@@ -2714,6 +2746,14 @@ func executeProtocolRequest(ctx context.Context, config providerConfig, spec pro
 }
 
 func executeProtocolBinaryRequest(ctx context.Context, config providerConfig, spec protocol.RequestSpec) ([]byte, string, error) {
+	return executeProtocolBinaryRequestWithConsumer(ctx, config, spec, nil)
+}
+
+func executeProtocolBinaryRequestWithConsumer(ctx context.Context, config providerConfig, spec protocol.RequestSpec, onChunk func(string, []byte)) ([]byte, string, error) {
+	return executeProtocolBinaryRequestWithConsumerUntil(ctx, config, spec, onChunk, nil)
+}
+
+func executeProtocolBinaryRequestWithConsumerUntil(ctx context.Context, config providerConfig, spec protocol.RequestSpec, onChunk func(string, []byte), done func() bool) ([]byte, string, error) {
 	if err := spec.Validate(); err != nil {
 		return nil, "", err
 	}
@@ -2740,7 +2780,7 @@ func executeProtocolBinaryRequest(ctx context.Context, config providerConfig, sp
 	if err := applyProtocolAuth(req, config, spec.Auth); err != nil {
 		return nil, "", err
 	}
-	return doBinary(req)
+	return doBinaryWithConsumerUntil(req, onChunk, done)
 }
 
 func protocolRequestBody(ctx context.Context, config providerConfig, spec protocol.RequestSpec) (io.Reader, string, error) {
@@ -4921,6 +4961,10 @@ func streamContentText(value interface{}) string {
 }
 
 func postStreamingBinary(ctx context.Context, config providerConfig, path string, body interface{}, onChunk func(string, []byte)) ([]byte, string, error) {
+	return postStreamingBinaryUntil(ctx, config, path, body, onChunk, nil)
+}
+
+func postStreamingBinaryUntil(ctx context.Context, config providerConfig, path string, body interface{}, onChunk func(string, []byte), done func() bool) ([]byte, string, error) {
 	data, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL(config.BaseURL, path), bytes.NewReader(data))
 	if err != nil {
@@ -4930,7 +4974,7 @@ func postStreamingBinary(ctx context.Context, config providerConfig, path string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	ApplyOutboundHeaders(req, config.Headers)
-	return doBinaryWithConsumer(req, onChunk)
+	return doBinaryWithConsumerUntil(req, onChunk, done)
 }
 
 type streamingTextDeltaParser struct {
@@ -5177,6 +5221,10 @@ func doBinary(req *http.Request) ([]byte, string, error) {
 }
 
 func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]byte, string, error) {
+	return doBinaryWithConsumerUntil(req, onChunk, nil)
+}
+
+func doBinaryWithConsumerUntil(req *http.Request, onChunk func(string, []byte), done func() bool) ([]byte, string, error) {
 	startedAt := time.Now()
 	requestTimeout := providerHTTPTimeout
 	if deadline, ok := req.Context().Deadline(); ok {
@@ -5263,6 +5311,9 @@ func doBinaryWithConsumer(req *http.Request, onChunk func(string, []byte)) ([]by
 			_, _ = buffered.Write(chunk[:readCount])
 			if onChunk != nil {
 				onChunk(mimeType, chunk[:readCount])
+			}
+			if done != nil && done() {
+				break
 			}
 		}
 		if errors.Is(readErr, io.EOF) {

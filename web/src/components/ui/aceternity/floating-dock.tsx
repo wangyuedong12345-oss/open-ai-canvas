@@ -25,6 +25,7 @@ export type FloatingDockSwitchOption = {
     label: string;
     icon: ReactNode;
     value: string;
+    iconSize?: number;
 };
 
 export type FloatingDockSwitch = {
@@ -294,7 +295,8 @@ function DockSwitch({ entry, compact, showLabel, motionEnabled, metrics }: { ent
     const touch = metrics.base >= 40;
     const slot = touch ? 32 : compact ? 24 : 26;
     const gap = touch ? 10 : compact ? 8 : 10;
-    const padX = touch ? 7 : compact ? 6 : 7;
+    const padding = touch ? 4 : 3;
+    const defaultIconSize = touch ? 16 : 15;
 
     return (
         <span
@@ -311,7 +313,7 @@ function DockSwitch({ entry, compact, showLabel, motionEnabled, metrics }: { ent
         >
             <span
                 className="aceternity-dock-switch-track relative inline-flex items-center"
-                style={{ gap, padding: `${touch ? 4 : 3}px ${padX}px` }}
+                style={{ gap, padding }}
             >
                 <motion.span
                     aria-hidden
@@ -319,7 +321,7 @@ function DockSwitch({ entry, compact, showLabel, motionEnabled, metrics }: { ent
                     initial={false}
                     animate={{ x: selectedIndex * (slot + gap), y: "-50%" }}
                     transition={reducedMotion || !motionEnabled ? { duration: 0 } : aceternityMotion.spring.dock}
-                    style={{ width: slot, height: slot, left: padX }}
+                    style={{ width: slot, height: slot, left: padding }}
                 />
                 {entry.options.map((option) => {
                     const checked = option.value === entry.value;
@@ -345,7 +347,9 @@ function DockSwitch({ entry, compact, showLabel, motionEnabled, metrics }: { ent
                                     if (!checked) entry.onChange(option.value);
                                 }}
                             >
-                                <span className={cn("grid place-items-center", touch ? "[&_svg]:size-4" : "[&_svg]:size-[15px]")}>{option.icon}</span>
+                                <span className="grid place-items-center" style={{ width: option.iconSize ?? defaultIconSize, height: option.iconSize ?? defaultIconSize }}>
+                                    {option.icon}
+                                </span>
                             </button>
                             <AnimatePresence>
                                 {showTooltip ? (

@@ -73,7 +73,7 @@ func Builtins() *Registry {
 	}
 	registry, err := NewRegistry(
 		openAIChatAdapter(), openAIResponsesAdapter(), claudeAdapter(),
-		openAIImagesAdapter(), grokImagesAdapter(), arkImagesAdapter(), jimengImagesAdapter(), geminiImagesAdapter(),
+		openAIImagesAdapter(), asyncOpenAIImagesAdapter(), grokImagesAdapter(), arkImagesAdapter(), jimengImagesAdapter(), geminiImagesAdapter(),
 		openAIVideosAdapter(), newAPIChannel1Adapter(), newAPIVideosAdapter(), xAIVideosAdapter(), arkVideosAdapter(), jimengVideosAdapter(), geminiVeoAdapter(), novitaVideosAdapter(), miniMaxVideosAdapter(),
 		openAIAudioAdapter(), asyncAudioAdapter(), agnesAdapter(),
 	)
@@ -197,6 +197,24 @@ func openAIImagesAdapter() Adapter {
 		},
 		parseCreate: parseImageResponse,
 	}
+}
+
+func asyncOpenAIImagesAdapter() Adapter {
+	info := metadata("openai-image-async", "OpenAI Images Async", "OpenAI compatible", CapabilityImage, "POST /v1/images/generations", "GET /v1/tasks/{task_id}", "application/json")
+	info.Parameters = mediaParams()
+	return asyncMediaAdapter(info, CapabilityImage, func(r GenerationRequest) (RequestSpec, error) {
+		body := map[string]any{"model": r.Model, "prompt": r.Prompt}
+		if r.ImageCount > 0 {
+			body["n"] = r.ImageCount
+		}
+		copyIf(body, "size", r.AspectRatio)
+		copyIf(body, "quality", r.Quality)
+		if len(r.Images) > 0 {
+			body["image_urls"] = mediaValues(r.Images)
+		}
+		mergeExtra(body, r.Extra, "size", "quality", "background", "output_format", "style", "n")
+		return jsonSpec(http.MethodPost, "/v1/images/generations", body), nil
+	})
 }
 
 func grokImagesAdapter() Adapter {
@@ -1018,6 +1036,12 @@ func parseAsyncCreate(payload map[string]any) (CreateResult, error) {
 		id = defaultValue(firstString(data, "id", "task_id", "taskId", "request_id"), id)
 		status = normalizeStatus(defaultValue(firstString(data, "status", "state"), string(status)))
 	}
+	if values, ok := payload["data"].([]any); ok && len(values) > 0 {
+		if data, _ := values[0].(map[string]any); data != nil {
+			id = defaultValue(firstString(data, "id", "task_id", "taskId", "request_id"), id)
+			status = normalizeStatus(defaultValue(firstString(data, "status", "state"), string(status)))
+		}
+	}
 	if id == "" {
 		return CreateResult{}, fmt.Errorf("async response has no task id")
 	}
@@ -1049,6 +1073,13 @@ func parseAsyncMediaPoll(c PollContext, payload map[string]any, capability Capab
 	references = append(references, mediaFromArray(payload["data"], capability)...)
 	if content := object(payload["content"]); content != nil {
 		references = append(references, mediaFromArray([]any{content}, capability)...)
+	}
+	if resultData := object(payload["result"]); resultData != nil {
+		references = append(references, mediaFromArray(resultData[resultKind+"s"], capability)...)
+		references = append(references, mediaFromArray(resultData["data"], capability)...)
+		if content := object(resultData["content"]); content != nil {
+			references = append(references, mediaFromArray([]any{content}, capability)...)
+		}
 	}
 	keys := []string{resultKind + "_url", resultKind + "Url", "result_url", "url"}
 	if resultKind == "video" {
@@ -1239,6 +1270,15 @@ func mediaFromArray(value any, capability Capability) []MediaReference {
 			}
 			if value := firstString(m, "url", "image_url", "video_url", "audio_url"); value != "" {
 				result = append(result, MediaReference{URL: value, Kind: kind})
+			}
+			for _, key := range []string{"url", "image_url", "video_url", "audio_url"} {
+				if values, ok := m[key].([]any); ok {
+					for _, value := range values {
+						if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
+							result = append(result, MediaReference{URL: strings.TrimSpace(text), Kind: kind})
+						}
+					}
+				}
 			}
 		}
 	}

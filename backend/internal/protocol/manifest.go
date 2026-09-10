@@ -672,7 +672,7 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 			result = append(result, reference)
 		case map[string]any:
 			reference := MediaReference{
-				ID: manifestString(typed["id"]), URL: manifestString(typed["url"]), DataURL: manifestString(typed["dataUrl"]),
+				ID: manifestString(typed["id"]), URL: mediaString(typed["url"]), DataURL: mediaString(typed["dataUrl"]),
 				Kind: defaultValue(manifestString(typed["kind"]), kind), Role: manifestString(typed["role"]), MIMEType: manifestString(typed["mimeType"]),
 				Name: manifestString(typed["name"]), Order: manifestInt(typed["order"]), Weight: manifestFloat(typed["weight"]), Ephemeral: ephemeral || manifestTruthy(typed["ephemeral"]),
 			}
@@ -684,10 +684,23 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 			}
 			if reference.URL != "" || reference.DataURL != "" {
 				result = append(result, reference)
+				continue
+			}
+			for _, key := range []string{"url", "file_url", "fileUrl", "image_url", "imageUrl", "video_url", "videoUrl", "audio_url", "audioUrl", "uri"} {
+				for _, value := range manifestArray(typed[key]) {
+					if text := strings.TrimSpace(manifestString(value)); text != "" {
+						result = append(result, MediaReference{URL: text, Kind: kind, Role: reference.Role, MIMEType: reference.MIMEType, Name: reference.Name, Order: reference.Order, Weight: reference.Weight, Ephemeral: reference.Ephemeral})
+					}
+				}
 			}
 		}
 	}
 	return result
+}
+
+func mediaString(value any) string {
+	text, _ := value.(string)
+	return strings.TrimSpace(text)
 }
 
 var (
@@ -737,6 +750,14 @@ func mediaPathValues(payload map[string]any, path string) []string {
 		case map[string]any:
 			if url := firstString(typed, "url", "file_url", "fileUrl", "video_url", "videoUrl", "image_url", "imageUrl"); url != "" {
 				values = append(values, url)
+				continue
+			}
+			for _, key := range []string{"url", "file_url", "fileUrl", "video_url", "videoUrl", "image_url", "imageUrl"} {
+				for _, value := range manifestArray(typed[key]) {
+					if text := strings.TrimSpace(manifestString(value)); text != "" {
+						values = append(values, text)
+					}
+				}
 			}
 		}
 	}

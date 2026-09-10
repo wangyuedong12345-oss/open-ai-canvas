@@ -239,6 +239,31 @@ for (const [id, name, vendor, baseUrl] of [
 }
 
 add({
+  id: "openai-images-async", providerId: "openai-image-async", name: "OpenAI Images Async", vendor: "OpenAI compatible", capability: "image",
+  baseUrl: "https://api.openai.com", auth: bearer, params: imageParams,
+  notes: "该协议用于 OpenAI Images 兼容但异步返回 task_id 的网关。创建请求沿用 /v1/images/generations，返回 task_id 后通过 /v1/tasks/{task_id} 轮询，轮询结果需包含 image_url/result_url/url/images/data 等可下载图片字段。",
+  create: jsonCreate("/v1/images/generations", {
+    model: ref("request.model"), prompt: ref("request.prompt"),
+    n: omit(ref("request.imageCount")),
+    size: omit(ref("request.aspectRatio")),
+    quality: omit(ref("request.quality")),
+    image_urls: omit(map(ref("request.images"), "image", coalesce(ref("image.url"), ref("image.dataUrl")))),
+    background: omit(ref("request.providerOptions.openai-image-async.background")),
+    output_format: omit(ref("request.providerOptions.openai-image-async.output_format")),
+    style: omit(ref("request.providerOptions.openai-image-async.style")),
+    extra_body: omit(ref("request.providerOptions.openai-image-async.extra_body"))
+  }),
+  poll: { method: "GET", path: "/v1/tasks/{{taskId}}" },
+  response: asyncResponse("image", {
+    taskId: coalesce(ref("response.id"), ref("response.task_id"), ref("response.taskId"), ref("response.request_id"), ref("response.data.id"), ref("response.data.task_id"), ref("response.data.0.id"), ref("response.data.0.task_id"), ref("taskId")),
+    status: coalesce(ref("response.status"), ref("response.state"), ref("response.data.status"), ref("response.data.0.status"), "pending"),
+    images: coalesce(ref("response.data.result.images"), ref("response.result.images"), ref("response.images"), ref("response.output"), ref("response.image_url"), ref("response.imageUrl"), ref("response.result_url"), ref("response.url"), ref("response.data.image_url"), ref("response.data.imageUrl"), ref("response.data.result_url"), ref("response.data.url"), ref("response.data")),
+    errorPaths: ["error.code"],
+    messagePaths: ["error.message", "message"]
+  })
+});
+
+add({
   id: "xai-grok-images", providerId: "grok-image", name: "xAI Grok Images", vendor: "xAI", capability: "image",
   baseUrl: "https://api.x.ai", auth: bearer, params: imageParams,
   create: jsonCreate("/v1/images/generations", {
