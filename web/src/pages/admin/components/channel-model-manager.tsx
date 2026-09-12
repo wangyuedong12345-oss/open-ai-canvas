@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { App, Button, Checkbox, Input, Modal, Popconfirm, Select, Space } from "antd";
+import { App, Button, Checkbox, Empty, Input, Modal, Popconfirm, Select, Space, Tabs } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
@@ -13,6 +13,8 @@ import { ChannelModelEditor } from "./channel-model-editor";
 import { AdminPageFrame } from "./admin-shell";
 import { AdminBatchBar, AdminDataTable, AdminFilterChip, AdminStatusBadge } from "./admin-ui";
 import { ChannelOrderDialog } from "./channel-order-dialog";
+import type { ChannelModelCatalogItem } from "@/lib/channel-model-catalog";
+import { filterImportModels, importCategories, replaceVisibleSelection, type ImportCategory } from "./model-import-filter";
 
 export function ChannelModelManager({ channel, onClose, onChanged }: { channel: ModelChannel; onClose: () => void; onChanged: () => void | Promise<void> }) {
     const { message, modal } = App.useApp();
@@ -23,7 +25,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(false);
     const [fetchPreviewOpen, setFetchPreviewOpen] = useState(false);
-    const [fetchPreviewModels, setFetchPreviewModels] = useState<string[]>([]);
+    const [fetchPreviewModels, setFetchPreviewModels] = useState<ChannelModelCatalogItem[]>([]);
+    const [fetchKeyword, setFetchKeyword] = useState("");
+    const [fetchCategory, setFetchCategory] = useState<ImportCategory>("all");
     const [selectedFetchModels, setSelectedFetchModels] = useState<string[]>([]);
     const [importing, setImporting] = useState(false);
     const [editorOpen, setEditorOpen] = useState(false);
@@ -84,7 +88,9 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 return;
             }
             setFetchPreviewModels(result.models);
-            setSelectedFetchModels(result.models);
+            setSelectedFetchModels([]);
+            setFetchKeyword("");
+            setFetchCategory("all");
             setFetchPreviewOpen(true);
         } catch (error) {
             message.error(error instanceof Error ? error.message : "拉取模型失败");
@@ -102,6 +108,8 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
         setFetchPreviewOpen(false);
         setFetchPreviewModels([]);
         setSelectedFetchModels([]);
+        setFetchKeyword("");
+        setFetchCategory("all");
     };
 
     const importSelectedModels = async () => {
@@ -234,17 +242,22 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
     const existingFetchModelKeys = new Set(items.map((item) => normalizeFetchModelKey(item.modelKey)));
     const selectedNewFetchModels = selectedFetchModels.filter((name) => !existingFetchModelKeys.has(normalizeFetchModelKey(name)));
     const selectedExistingFetchCount = selectedFetchModels.length - selectedNewFetchModels.length;
-    const allFetchModelsSelected = fetchPreviewModels.length > 0 && fetchPreviewModels.every((name) => selectedFetchModels.includes(name));
-    const fetchModelOptions = fetchPreviewModels.map((name) => {
+    const visibleFetchModels = filterImportModels(fetchPreviewModels, fetchKeyword, fetchCategory);
+    const visibleFetchIDs = visibleFetchModels.map((item) => item.id);
+    const allFetchModelsSelected = visibleFetchIDs.length > 0 && visibleFetchIDs.every((name) => selectedFetchModels.includes(name));
+    const anyVisibleSelected = visibleFetchIDs.some((name) => selectedFetchModels.includes(name));
+    const fetchModelOptions = visibleFetchModels.map((item) => {
+        const name = item.id;
+        const label = item.displayName && item.displayName !== name ? `${item.displayName} (${name})` : name;
         const alreadyExists = existingFetchModelKeys.has(normalizeFetchModelKey(name));
         return {
             label: alreadyExists ? (
                 <span className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 break-all">{name}</span>
+                    <span className="min-w-0 break-all">{label}</span>
                     <span className="shrink-0 text-xs text-foreground/45">已存在</span>
                 </span>
             ) : (
-                <span className="break-all">{name}</span>
+                <span className="break-all">{label}</span>
             ),
             value: name,
         };
@@ -415,31 +428,37 @@ export function ChannelModelManager({ channel, onClose, onChanged }: { channel: 
                 ]}
             >
                 <div className="space-y-3">
-                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认已全选，可批量全选或取消全选；已存在的模型不会重复导入。</p>
+                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型</p>
+                    <Input allowClear prefix={<Search className="size-4 text-foreground/40" />} placeholder="搜索模型名称或 ID" aria-label="搜索待导入模型" value={fetchKeyword} disabled={importing} onChange={(event) => setFetchKeyword(event.target.value)} />
+                    <Tabs activeKey={fetchCategory} onChange={(key) => setFetchCategory(key as ImportCategory)} items={importCategories.map((key) => ({
+                        key,
+                        disabled: importing,
+                        label: `${({ all: "全部", text: "文本", image: "图像", video: "视频", audio: "音频", unknown: "未分类" })[key]} (${filterImportModels(fetchPreviewModels, "", key).length})`,
+                    }))} />
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/70 bg-muted/25 px-3 py-2">
                         <span className="text-sm font-medium text-foreground/70" aria-live="polite">
-                            已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型
+                            当前匹配 {visibleFetchIDs.length} 个，总共已选 {selectedFetchModels.length} 个
                         </span>
                         <Space size={4}>
-                            <Button size="small" disabled={importing || allFetchModelsSelected} onClick={() => setSelectedFetchModels(fetchPreviewModels)}>
-                                全选
+                            <Button size="small" disabled={importing || !visibleFetchIDs.length || allFetchModelsSelected} onClick={() => setSelectedFetchModels((current) => replaceVisibleSelection(current, visibleFetchIDs, visibleFetchIDs))}>
+                                全选当前结果
                             </Button>
-                            <Button size="small" disabled={importing || selectedFetchModels.length === 0} onClick={() => setSelectedFetchModels([])}>
-                                取消全选
+                            <Button size="small" disabled={importing || !anyVisibleSelected} onClick={() => setSelectedFetchModels((current) => replaceVisibleSelection(current, visibleFetchIDs, []))}>
+                                取消选择当前结果
                             </Button>
                         </Space>
                     </div>
-                    <div className="max-h-[min(60vh,520px)] overflow-y-auto rounded-md border border-border/70 p-3">
-                        <Checkbox.Group
+                    <div className="h-[min(40vh,360px)] overflow-y-auto rounded-md border border-border/70 p-3">
+                        {visibleFetchIDs.length ? <Checkbox.Group
                             className="channel-model-import-picker grid w-full grid-cols-1 gap-2 sm:grid-cols-2"
                             value={selectedFetchModels}
                             options={fetchModelOptions}
                             disabled={importing}
-                            onChange={(values) => setSelectedFetchModels(values as string[])}
-                        />
+                            onChange={(values) => setSelectedFetchModels((current) => replaceVisibleSelection(current, visibleFetchIDs, (values as string[]).filter((id) => visibleFetchIDs.includes(id))))}
+                        /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的模型" />}
                     </div>
                     <div className="text-xs text-foreground/50">
-                        {selectedNewFetchModels.length > 0 ? `将导入 ${selectedNewFetchModels.length} 个新模型` : "当前勾选的模型均已存在"}
+                        {!selectedFetchModels.length ? "尚未选择模型" : selectedNewFetchModels.length > 0 ? `将导入 ${selectedNewFetchModels.length} 个新模型` : "当前勾选的模型均已存在"}
                         {selectedExistingFetchCount > 0 ? `，另有 ${selectedExistingFetchCount} 个已存在模型已勾选` : ""}
                     </div>
                 </div>

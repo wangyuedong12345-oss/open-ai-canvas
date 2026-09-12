@@ -191,11 +191,19 @@ func (s *Service) FetchAdminChannelModels(ctx context.Context, actor *model.User
 }
 
 // PreviewAdminChannelModels 只读取上游模型目录，不修改渠道模型配置。
-func (s *Service) PreviewAdminChannelModels(ctx context.Context, actor *model.User, channelID string) ([]string, error) {
+func (s *Service) PreviewAdminChannelModels(ctx context.Context, actor *model.User, channelID string) ([]ChannelModelCatalogItem, error) {
 	if err := s.RequireAdmin(actor); err != nil {
 		return nil, err
 	}
-	return s.fetchAdminChannelModelCatalog(ctx, actor, channelID)
+	channel, err := s.adminSystemChannel(channelID)
+	if err != nil {
+		return nil, err
+	}
+	headers, err := ParseOutboundHeadersJSON(channel.HeadersJSON)
+	if err != nil {
+		return nil, err
+	}
+	return s.FetchChannelModelCatalog(ctx, actor, ChannelModelsRequest{BaseURL: channel.BaseURL, AllowLocalChannel: channel.AllowLocalChannel, APIKey: channel.APIKey, APIFormat: channel.APIFormat, Headers: headers})
 }
 
 // ImportAdminChannelModels 只导入管理员明确选择、且仍存在于上游目录中的模型。

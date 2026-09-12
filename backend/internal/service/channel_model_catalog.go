@@ -28,6 +28,7 @@ type channelModelsPayload struct {
 }
 
 type channelModelItem struct {
+	OutputModalities       []string                      `json:"output_modalities"`
 	ID                     string                        `json:"id"`
 	Name                   string                        `json:"name"`
 	DisplayName            string                        `json:"display_name"`
@@ -74,6 +75,7 @@ func (s *Service) FetchChannelModels(ctx context.Context, actor *model.User, inp
 // ChannelModelCatalogItem 是前端自定义渠道拉取模型目录后的最小合同；
 // 协议、能力和可选参数均来自上游公开元数据，不展开供应商内部兼容模型。
 type ChannelModelCatalogItem struct {
+	OutputModalities       []string                             `json:"outputModalities,omitempty"`
 	ID                     string                               `json:"id"`
 	DisplayName            string                               `json:"displayName,omitempty"`
 	ModelType              string                               `json:"modelType,omitempty"`
@@ -177,6 +179,7 @@ func (s *Service) FetchChannelModelCatalog(ctx context.Context, actor *model.Use
 		}
 		seen[name] = true
 		catalog = append(catalog, ChannelModelCatalogItem{
+			OutputModalities:       item.OutputModalities,
 			ID:                     name,
 			DisplayName:            strings.TrimSpace(item.DisplayName),
 			ModelType:              normalizeCatalogModelType(item.ModelType),

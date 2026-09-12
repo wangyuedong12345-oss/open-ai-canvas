@@ -5,6 +5,7 @@ import type { ModelChannel } from "@/stores/use-config-store";
 export type ChannelModelCatalogOption = { value: string; label?: string };
 
 export type ChannelModelCatalogItem = {
+    outputModalities?: string[];
     id: string;
     displayName?: string;
     modelType?: "text" | "image" | "video" | "audio";
