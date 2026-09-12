@@ -3992,6 +3992,9 @@ test("account switching keeps new generation consumers closed while old persiste
 
 test("an in-flight provider request is aborted and drained before the account changes", async () => {
     const originalWindow = (globalThis as { window?: unknown }).window;
+    const originalGetItem = localforage.getItem.bind(localforage);
+    const originalSetItem = localforage.setItem.bind(localforage);
+    const indexedValues = new Map<string, string>();
     const localStorageValues = new Map<string, string>();
     Object.defineProperty(globalThis, "window", {
         configurable: true,
@@ -4003,6 +4006,11 @@ test("an in-flight provider request is aborted and drained before the account ch
             },
         },
     });
+    localforage.getItem = (async (key: string) => indexedValues.get(key) ?? null) as typeof localforage.getItem;
+    localforage.setItem = (async (key: string, value: string) => {
+        indexedValues.set(key, value);
+        return value;
+    }) as typeof localforage.setItem;
     setActiveUserScope("account-A");
     const request = beginGenerationConsumer();
     let abortObserved = false;
@@ -4023,6 +4031,8 @@ test("an in-flight provider request is aborted and drained before the account ch
         expect(getActiveUserScope()).toBe("account-B");
     } finally {
         request.release();
+        localforage.getItem = originalGetItem;
+        localforage.setItem = originalSetItem;
         if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
         else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
     }
@@ -4441,14 +4451,86 @@ test("incremental sessions leave cached entities untouched and fetch only the op
     }
 });
 
-test("a remote asset page normalizes legacy records before they reach the store", async () => {
+test("concurrent canvas opens share one remote detail request", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousProjects = useCanvasStore.getState().projects;
+    const requests: string[] = [];
+    const project = storedCanvasProject("concurrent-open", "Concurrent");
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: { setTimeout: () => 1, clearTimeout: () => undefined, localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined } },
+    });
+    apiClient.defaults.adapter = async (config) => {
+        requests.push(`${config.method} ${config.url}`);
+        throw new Error("detail unavailable");
+    };
+    try {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: [project] });
+        await initializeRemoteUserDataSession("concurrent-open-owner");
+        const first = loadCanvasProjectForEditing(project.id).catch((error: unknown) => error);
+        const second = loadCanvasProjectForEditing(project.id).catch((error: unknown) => error);
+        const firstError = await first;
+        const secondError = await second;
+        expect(firstError).toBeInstanceOf(Error);
+        expect(secondError).toBeInstanceOf(Error);
+        expect((firstError as Error).message).toContain("detail unavailable");
+        expect((secondError as Error).message).toContain("detail unavailable");
+        expect(requests).toEqual(["get /canvas-projects/concurrent-open"]);
+    } finally {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: previousProjects });
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("remote canvas conflict refreshes the baseline and overwrites once without repeating detail reads", async () => {
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    const previousAdapter = apiClient.defaults.adapter;
+    const previousProjects = useCanvasStore.getState().projects;
+    const requests: string[] = [];
+    const cached = storedCanvasProject("latched-conflict", "Cached");
+    const remote = { ...cached, updatedAt: "2026-09-11T00:00:00.000Z" };
+    Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: { setTimeout: () => 1, clearTimeout: () => undefined, localStorage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined } },
+    });
+    apiClient.defaults.adapter = async (config) => {
+        requests.push(`${config.method} ${config.url}`);
+        const project = config.method === "put" ? { ...remote, ...cached, title: "Edited locally" } : remote;
+        return { data: { code: 0, data: { project }, msg: "" }, status: 200, statusText: "OK", headers: {}, config };
+    };
+    try {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: [cached] });
+        await initializeRemoteUserDataSession("latched-conflict-owner");
+        useCanvasStore.getState().renameProject(cached.id, "Edited locally");
+        await expect(saveRemoteUserDataNow()).resolves.toBeUndefined();
+        await expect(saveRemoteUserDataNow()).resolves.toBeUndefined();
+        expect(requests).toEqual([
+            "get /canvas-projects/latched-conflict",
+            "put /canvas-projects/latched-conflict",
+        ]);
+    } finally {
+        resetRemoteUserDataSync();
+        useCanvasStore.setState({ projects: previousProjects });
+        apiClient.defaults.adapter = previousAdapter;
+        if (originalWindow === undefined) delete (globalThis as { window?: unknown }).window;
+        else Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+    }
+});
+
+test("a remote asset page rejects incomplete records instead of patching them into the store", async () => {
     const previousAdapter = apiClient.defaults.adapter;
     const previousAssets = useAssetStore.getState().assets;
     const legacy = {
         id: "legacy-remote-image",
         kind: "image",
         title: "镜头01 · 图片",
-        category: "image",
+        category: "material",
         coverUrl: "opaque://legacy",
         createdAt: "2026-09-01T00:00:00.000Z",
         updatedAt: "2026-09-01T00:00:00.000Z",
@@ -4478,10 +4560,8 @@ test("a remote asset page normalizes legacy records before they reach the store"
     try {
         useAssetStore.setState({ assets: [] });
         await initializeRemoteUserDataSession("account-legacy");
-        await loadAssetLibraryPage({ page: 1, pageSize: 40 });
-        const stored = useAssetStore.getState().assets.find((asset) => asset.id === legacy.id);
-        expect(stored?.tags).toEqual([]);
-        expect(() => stored?.tags.join(" ")).not.toThrow();
+        await expect(loadAssetLibraryPage({ page: 1, pageSize: 40 })).rejects.toThrow(/tags/);
+        expect(useAssetStore.getState().assets).toEqual([]);
     } finally {
         resetRemoteUserDataSync();
         apiClient.defaults.adapter = previousAdapter;

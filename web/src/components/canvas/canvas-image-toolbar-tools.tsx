@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
-import { Brush, Camera, Copy, FileText, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Crop, SlidersHorizontal, Smile, Upload, Scaling } from "lucide-react";
+import { Brush, Camera, Copy, FileText, Globe2, Grid2x2, Lock, LockOpen, Maximize2, PencilLine, Crop, SlidersHorizontal, Smile, Sun, Upload, Scaling } from "lucide-react";
 
 import type { CanvasNodeData } from "@/types/canvas";
 import type { NodeToolbarGroup } from "@/lib/canvas/tool-registry";
 
-type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "view";
+type ImageNodeActionToolId = "copyPrompt" | "reversePrompt" | "replace" | "resize" | "annotation" | "maskEdit" | "emotion" | "portraitTexture" | "crop" | "split" | "upscale" | "superResolve" | "angle" | "lighting" | "panorama" | "view";
 
 type ImageToolHandlers = {
     onUpload: (node: CanvasNodeData) => void;
@@ -18,6 +18,8 @@ type ImageToolHandlers = {
     onUpscale: (node: CanvasNodeData) => void;
     onSuperResolve: (node: CanvasNodeData) => void;
     onAngle: (node: CanvasNodeData) => void;
+    onLighting: (node: CanvasNodeData) => void;
+    onPanorama: (node: CanvasNodeData) => void;
     onViewImage: (node: CanvasNodeData) => void;
     onCopyPrompt: (node: CanvasNodeData) => void;
     onReversePrompt: (node: CanvasNodeData) => void;
@@ -153,12 +155,32 @@ const imageToolDefinitions: ImageToolDefinition[] = [
         run: (node, handlers) => handlers.onAngle(node),
     },
     {
+        id: "lighting",
+        label: "打光",
+        section: "视角",
+        description: "调整光线方向、亮度与光效，生成新图片",
+        icon: () => <Sun className="size-3.5" />,
+        group: "lighting",
+        order: 30,
+        run: (node, handlers) => handlers.onLighting(node),
+    },
+    {
         id: "view",
         label: "预览",
         icon: () => <Maximize2 className="size-3.5" />,
         group: "utility",
         order: 10,
         run: (node, handlers) => handlers.onViewImage(node),
+    },
+    {
+        id: "panorama",
+        label: "全景图",
+        section: "视角",
+        description: "基于该图片创建 360° 全景查看节点",
+        icon: () => <Globe2 className="size-3.5" />,
+        group: "panorama",
+        order: 80,
+        run: (node, handlers) => handlers.onPanorama(node),
     },
 ];
 
