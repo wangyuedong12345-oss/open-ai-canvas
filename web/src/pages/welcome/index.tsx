@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, ConfigProvider, Select, Tabs } from "antd";
-import { ArrowDown, ArrowRight, ArrowUpRight, Code2, Menu, Pause, Play, X } from "lucide-react";
+import { Button, ConfigProvider, Tabs } from "antd";
+import { ArrowDown, ArrowRight, ArrowUpRight, Code2, Pause, Play, X } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/base/buttons";
@@ -8,43 +8,29 @@ import { getAntThemeConfig } from "@/lib/app-theme";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 
 import { WelcomeContributorsCard } from "./contributors-card";
-import { chapters, getWelcomeLook, showcases, welcomeLooks, type WelcomeLook } from "./story";
+import { chapters, getWelcomeLook, showcases, type WelcomeLook } from "./story";
 import "./welcome.css";
 
 const StoryReel = lazy(() => import("./story-reel"));
 const github = "https://github.com/ddcat-ai/open-ai-canvas";
+const welcomeBrandName = "Taiyi";
 
 export default function WelcomePage() {
     const [look, setLook] = useState(getWelcomeLook);
     const appearance = useAppearanceStore((state) => state.appearance);
-    const restorePickerFocus = useRef(false);
-    useEffect(() => {
-        if (!restorePickerFocus.current) return;
-        document.getElementById("welcome-look-select")?.focus({ preventScroll: true });
-        restorePickerFocus.current = false;
-    }, [look]);
     useEffect(() => {
         const onHistory = () => setLook(getWelcomeLook());
         window.addEventListener("popstate", onHistory);
         return () => window.removeEventListener("popstate", onHistory);
     }, []);
-    const changeLook = (id: string) => {
-        const next = welcomeLooks.find((item) => item.id === id);
-        if (!next || next.id === look.id) return;
-        const url = new URL(window.location.href);
-        url.searchParams.set("look", id);
-        window.history.pushState(null, "", url);
-        restorePickerFocus.current = true;
-        setLook(next);
-    };
     return (
         <ConfigProvider theme={getAntThemeConfig(true, appearance.activeSkin)}>
-            <WelcomeExperience key={look.id} look={look} brandName={appearance.brandName} onLookChange={changeLook} />
+            <WelcomeExperience key={look.id} look={look} brandName={welcomeBrandName} />
         </ConfigProvider>
     );
 }
 
-function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLook; brandName: string; onLookChange: (id: string) => void }) {
+function WelcomeExperience({ look, brandName }: { look: WelcomeLook; brandName: string }) {
     const storyRef = useRef<HTMLElement>(null);
     const progressRef = useRef(0);
     const [chapter, setChapter] = useState(0);
@@ -52,13 +38,12 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
     const [paused, setPaused] = useState(false);
     const [failed, setFailed] = useState(false);
     const [ready, setReady] = useState(false);
-    const [menu, setMenu] = useState(false);
     const [showcase, setShowcase] = useState(1);
     const [playing, setPlaying] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
 
     useEffect(() => {
-        document.title = "影策 · 让一个故事从文字走向银幕";
+        document.title = "Taiyi · 让故事从文字走向银幕";
         const media = window.matchMedia("(prefers-reduced-motion: reduce)");
         const onMotion = () => setReduced(media.matches);
         media.addEventListener("change", onMotion);
@@ -91,7 +76,6 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
         if (!storyRef.current) return;
         const height = storyRef.current.offsetHeight - window.innerHeight;
         window.scrollTo({ top: storyRef.current.offsetTop + height * (index === 5 ? 0.97 : index / 6 + (index ? 0.04 : 0)), behavior: reduced ? "instant" : "smooth" });
-        setMenu(false);
     };
     const staticScene = reduced || failed;
     const active = showcases[showcase];
@@ -104,20 +88,11 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
                     <BrandLogo theme="dark" className="welcome-brand-logo" alt="" fallback={<span className="welcome-brand-logo is-fallback" />} />
                     {brandName}
                 </a>
-                <nav className={menu ? "welcome-nav is-open" : "welcome-nav"} aria-label="首页导航">
-                    <a href="#workbench" onClick={() => setMenu(false)}>工作台</a>
-                    <a href={github} target="_blank" rel="noreferrer">GitHub<ArrowUpRight size={13} /></a>
-                </nav>
                 <Button className="welcome-header-cta" type="primary" href="/create" icon={<ArrowUpRight size={16} />} iconPlacement="end">开始创作</Button>
-                <IconButton className="welcome-icon mobile-menu" variant="ghost" size="lg" icon={menu ? X : Menu} aria-label={menu ? "关闭菜单" : "打开菜单"} aria-expanded={menu} onClick={() => setMenu(!menu)} />
             </header>
-            <aside className="welcome-look-picker" aria-label="首页素材版本">
-                <Select id="welcome-look-select" aria-label="素材版本" value={look.id} options={welcomeLooks.map((item) => ({ label: item.label, value: item.id }))} onChange={onLookChange} popupMatchSelectWidth={false} />
-                {look.credit && <a href={`/welcome/credits.html#${look.id}`} target="_blank" rel="noreferrer" title={look.credit}>演示素材 · CC BY<ArrowUpRight size={12} /></a>}
-            </aside>
 
             <main>
-                <section ref={storyRef} id="story" className="welcome-story" aria-label="影策创作之旅">
+                <section ref={storyRef} id="story" className="welcome-story" aria-label="创作之旅">
                     <div className={`welcome-stage chapter-${chapter}${staticScene ? " is-static" : ""}`}>
                         <div className={`welcome-poster${ready && !staticScene ? " is-ready" : ""}`} aria-hidden="true"><img src={look.frames[staticScene ? chapter * 2 : 0]} alt="" fetchPriority="high" /></div>
                         {!staticScene && <SceneBoundary onError={() => setFailed(true)}><Suspense fallback={null}><StoryReel look={look} progress={progressRef} paused={paused} onReady={() => setReady(true)} onError={() => setFailed(true)} /></Suspense></SceneBoundary>}
@@ -146,8 +121,7 @@ function WelcomeExperience({ look, brandName, onLookChange }: { look: WelcomeLoo
                 <section className="welcome-ending"><h2>你的故事，<br />现在开始。</h2>
                 <WelcomeContributorsCard /></section>
             </main>
-            <footer className="welcome-footer"><a href="/welcome">{brandName}</a><span>开源 AI 影视创作工作台</span><a href={`${github}/blob/main/LICENSE`} target="_blank" rel="noreferrer">Open Source · MIT License<ArrowUpRight size={12} /></a></footer>
-            {look.credit && <div className="welcome-media-credit"><a href={`/welcome/credits.html#${look.id}`} target="_blank" rel="noreferrer">{look.credit} · 署名与许可<ArrowUpRight size={12} /></a></div>}
+            <footer className="welcome-footer"><a href="/welcome">{brandName}</a><span>AI 影视创作工作台</span><a href={`${github}/blob/main/LICENSE`} target="_blank" rel="noreferrer">Open Source · MIT License<ArrowUpRight size={12} /></a></footer>
             {playing && look.video && <FilmDialog look={look} onClose={() => setPlaying(false)} videoRef={videoRef} />}
         </div>
     );

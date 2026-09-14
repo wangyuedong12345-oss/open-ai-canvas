@@ -9,7 +9,7 @@ export const navigationTools = [
     },
     {
         slug: "projects",
-        label: "短剧创作",
+        label: "剧创",
         icon: Clapperboard,
         section: "创作空间",
     },
@@ -39,7 +39,7 @@ export const navigationTools = [
     },
     {
         slug: "plugins",
-        label: "插件中心",
+        label: "插件库",
         icon: Blocks,
         section: "工作台管理",
     },

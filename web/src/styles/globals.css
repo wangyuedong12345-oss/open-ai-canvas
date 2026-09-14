@@ -13416,11 +13416,30 @@ html:not(.dark) .creation-history-drawer-root {
     width: min(440px, 78vw);
     height: 172px;
     margin: 0 auto 18px;
+    overflow: hidden;
     isolation: isolate;
+    mask-image: linear-gradient(90deg, transparent 0, #000 9%, #000 91%, transparent 100%);
+}
+
+.creation-empty-art-track {
+    display: flex;
+    width: max-content;
+    height: 100%;
+    align-items: center;
+    gap: 18px;
+    animation: creation-empty-art-carousel 36s linear infinite;
+    will-change: transform;
+}
+
+.creation-empty-art:hover .creation-empty-art-track {
+    animation-play-state: paused;
 }
 
 .creation-empty-art-frame {
-    position: absolute;
+    position: relative;
+    width: clamp(220px, 42vw, 520px);
+    height: calc(100% - 18px);
+    flex: 0 0 auto;
     overflow: hidden;
     border: 1px solid color-mix(in srgb, var(--creation-text) 12%, transparent);
     border-radius: var(--r-md);
@@ -13429,13 +13448,6 @@ html:not(.dark) .creation-history-drawer-root {
 }
 
 .creation-empty-art-frame img { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(.86) contrast(.96); }
-.creation-empty-art-frame.is-back { top: 15px; left: 3%; width: 29%; height: 122px; transform: rotate(-8deg); opacity: .42; }
-.creation-empty-art-frame.is-main { z-index: 2; top: 0; left: 25%; width: 50%; height: 156px; transform: rotate(1deg); }
-.creation-empty-art-frame.is-front { top: 22px; right: 3%; width: 29%; height: 122px; transform: rotate(7deg); opacity: .48; }
-.creation-empty-art-frame.is-main::after { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 38%, color-mix(in srgb, #111 44%, transparent)); content: ""; }
-.creation-empty-art-frame span { position: absolute; z-index: 1; right: 13px; bottom: 12px; color: #fff; font-size: var(--fs-micro); letter-spacing: .08em; text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
-.creation-empty-art-caption { position: absolute; right: 25%; bottom: -3px; display: flex; align-items: center; gap: 8px; color: var(--creation-faint); font-size: var(--fs-micro); letter-spacing: .12em; }
-.creation-empty-art-caption span:first-child { color: var(--creation-text); font-variant-numeric: tabular-nums; }
 .creation-empty-workspace .creation-chat-intro { margin-bottom: 24px; }
 
 /* 素材选择器是创作页、自由画布和项目画布的唯一视觉入口。 */
@@ -13903,8 +13915,7 @@ html:not(.dark) .creation-history-drawer-root {
 @media (max-width: 680px) {
     .creation-empty-workspace { width: calc(100% - 28px); padding-top: 28px; }
     .creation-empty-art { width: min(390px, 90vw); height: 142px; }
-    .creation-empty-art-frame.is-main { height: 130px; }
-    .creation-empty-art-frame.is-back, .creation-empty-art-frame.is-front { height: 102px; }
+    .creation-empty-art-frame { width: min(70vw, 300px); }
     .asset-picker-shell { min-height: 0; height: min(640px, calc(100vh - var(--space-8))); }
     .asset-picker-toolbar { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 10px 42px 10px 12px; }
     .asset-picker-heading { gap: 6px; }
@@ -13926,13 +13937,14 @@ html:not(.dark) .creation-history-drawer-root {
 /* 轮播承担首屏视觉主角，工作区只保留很窄的安全边距。 */
 .creation-empty-workspace { width: min(1320px, calc(100% - 24px)); padding-top: clamp(18px, 3vh, 40px); }
 .creation-empty-art { width: min(1060px, calc(100% - 72px)); height: 300px; margin-bottom: 22px; }
-.creation-empty-art-frame.is-back { top: 28px; left: 2%; width: 23%; height: 220px; }
-.creation-empty-art-frame.is-main { top: 0; left: 19%; width: 62%; height: 270px; }
-.creation-empty-art-frame.is-front { top: 34px; right: 2%; width: 23%; height: 220px; }
 .creation-empty-art-frame img { animation: creation-empty-art-image-in 500ms var(--motion-ease-out) both; }
-.creation-empty-art-caption { right: 19%; bottom: -4px; }
-.creation-empty-workspace .creation-chat-intro { margin-top: 42px; }
+.creation-empty-workspace .creation-chat-intro { margin-top: 22px; }
 .creation-empty-composer { width: min(1120px, calc(100% - 48px)); }
+
+@keyframes creation-empty-art-carousel {
+    from { transform: translateX(0); }
+    to { transform: translateX(calc(-50% - 9px)); }
+}
 
 @keyframes creation-empty-art-image-in {
     from { opacity: .35; transform: scale(1.035); }
@@ -13940,17 +13952,16 @@ html:not(.dark) .creation-history-drawer-root {
 }
 
 @media (prefers-reduced-motion: reduce) {
+    .creation-empty-art-track { animation: none; }
     .creation-empty-art-frame img { animation: none; }
 }
 
 @media (max-width: 680px) {
     .creation-empty-workspace { width: calc(100% - 16px); padding-top: 18px; }
     .creation-empty-art { width: calc(100% - 10px); height: 210px; margin-bottom: 20px; }
-    .creation-empty-art-frame.is-back { top: 18px; height: 150px; }
-    .creation-empty-art-frame.is-main { left: 14%; width: 72%; height: 190px; }
-    .creation-empty-art-frame.is-front { top: 23px; height: 150px; }
-    .creation-empty-art-caption { right: 14%; }
-    .creation-empty-workspace .creation-chat-intro { margin-top: 28px; }
+    .creation-empty-art-track { gap: 12px; }
+    .creation-empty-art-frame { width: min(74vw, 320px); height: calc(100% - 14px); }
+    .creation-empty-workspace .creation-chat-intro { margin-top: 16px; }
     .creation-empty-composer { width: 100%; }
 }
 
@@ -15097,19 +15108,12 @@ html:not(.dark) .creation-history-drawer-root {
     margin: 0 auto 20px;
 }
 
-.creation-empty-workspace .creation-empty-art-frame.is-back { top: 18px; height: 146px; }
-.creation-empty-workspace .creation-empty-art-frame.is-main { top: 0; height: 182px; }
-.creation-empty-workspace .creation-empty-art-frame.is-front { top: 24px; height: 146px; }
-
 .creation-empty-workspace .creation-chat-intro { margin: 0 auto 18px; }
 
 .creation-empty-workspace > .creation-empty-suggest { margin: 26px auto 0; }
 
 @media (max-width: 800px) {
     .creation-empty-workspace > .creation-empty-art { height: 168px; margin-bottom: 16px; }
-    .creation-empty-workspace .creation-empty-art-frame.is-back { top: 14px; height: 122px; }
-    .creation-empty-workspace .creation-empty-art-frame.is-main { top: 0; height: 152px; }
-    .creation-empty-workspace .creation-empty-art-frame.is-front { top: 18px; height: 122px; }
     .creation-empty-workspace .creation-chat-intro { margin-top: 0; margin-bottom: 14px; }
     .creation-empty-workspace > .creation-empty-suggest { margin-top: 20px; }
 }

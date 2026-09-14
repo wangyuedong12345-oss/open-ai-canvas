@@ -120,6 +120,7 @@ body:has(.welcome-page) {
     opacity: 0.65;
 }
 .welcome-header-cta.ant-btn {
+    margin-left: auto;
     display: flex;
     align-items: center;
     justify-content: center;

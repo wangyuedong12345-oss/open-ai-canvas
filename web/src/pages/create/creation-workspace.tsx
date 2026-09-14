@@ -702,19 +702,21 @@ function DurationMenu({ profile, seconds, onChange }: { profile: VideoCapability
 }
 
 const creationEmptyBannerFrames = [
-    { src: "/short-drama-styles/cyberpunk-neon.jpg", caption: "镜头01 · 雨夜霓虹" },
-    { src: "/short-drama-styles/suspense-noir.jpg", caption: "镜头02 · 暗巷追逐" },
-    { src: "/short-drama-styles/retro-hong-kong.jpg", caption: "镜头03 · 天台重逢" },
+    { src: "/create-banner/镜头01.jpg", caption: "镜头01" },
+    { src: "/create-banner/镜头02.jpg", caption: "镜头02" },
+    { src: "/create-banner/镜头03.jpg", caption: "镜头03" },
+    { src: "/create-banner/镜头04.jpg", caption: "镜头04" },
+    { src: "/create-banner/镜头05.jpg", caption: "镜头05" },
+    { src: "/create-banner/镜头06.jpg", caption: "镜头06" },
 ];
 
 export function CreationEmptyBanner() {
-    const brandName = useAppearanceStore((state) => state.appearance.brandName);
     return <div className="creation-empty-art" aria-hidden="true">
-        {creationEmptyBannerFrames.map((frame, index) => <figure key={frame.caption} className={`creation-empty-art-frame ${index === 1 ? "is-main" : index === 0 ? "is-back" : "is-front"}`}>
-            <img src={frame.src} alt="" />
-            <span>{frame.caption}</span>
-        </figure>)}
-        <span className="creation-empty-art-caption"><span>{brandName}</span>把每一帧，交给镜头导演</span>
+        <div className="creation-empty-art-track">
+            {[...creationEmptyBannerFrames, ...creationEmptyBannerFrames].map((frame, index) => <figure key={`${frame.caption}-${index}`} className="creation-empty-art-frame">
+                <img src={frame.src} alt="" />
+            </figure>)}
+        </div>
     </div>;
 }
 

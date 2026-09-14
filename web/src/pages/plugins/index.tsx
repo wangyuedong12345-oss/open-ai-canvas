@@ -108,7 +108,7 @@ export default function PluginsPage() {
             setBackendPlugins(result.plugins);
             setPluginStates(result.states);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取插件中心失败");
+            message.error(error instanceof Error ? error.message : "读取插件库失败");
             setBackendPlugins([]);
         } finally {
             setBackendPluginsLoading(false);
@@ -252,7 +252,7 @@ export default function PluginsPage() {
                     <aside className="plugins-sidebar" aria-label="插件分类">
                         <div className="plugins-sidebar-heading">
                             <span className="plugins-sidebar-kicker">PLUGIN CENTER</span>
-                            <h1>插件中心</h1>
+                            <h1>插件库</h1>
                             <p>统一管理 provider、工作流、画布节点和其他扩展能力。</p>
                         </div>
                         <nav className="plugins-sidebar-nav">

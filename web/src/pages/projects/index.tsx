@@ -190,12 +190,12 @@ export default function ProjectsPage() {
     const hasInitialError = query.isError && !query.data;
     return (
         <WorkspacePage className="library-page" grid>
-            <section className="app-story-create-panel mt-4" aria-label="开始一部新短剧">
+            <section className="app-story-create-panel mt-4" aria-label="剧创">
                 <div className="app-story-create-head">
                     <div className="app-story-create-title">
                         <span className="app-story-create-mark"><Sparkles className="size-4" /></span>
                         <div>
-                            <h2>开始一部新短剧</h2>
+                            <h2>剧创</h2>
                             <p>写下一句话故事，或选择一个创建方式。</p>
                         </div>
                     </div>

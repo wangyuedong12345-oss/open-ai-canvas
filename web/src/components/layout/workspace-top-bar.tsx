@@ -12,11 +12,12 @@ import { useAppearanceStore } from "@/stores/use-appearance-store";
 const PAGE_TITLES: Record<string, string> = {
     home: "首页",
     create: "创作",
-    projects: "短剧创作",
+    projects: "剧创",
     canvas: "画布",
     tasks: "任务",
     assets: "素材",
     skills: "技能库",
+    plugins: "插件库",
     wallet: "积分中心",
     settings: "设置",
 };

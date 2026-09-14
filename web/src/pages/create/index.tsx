@@ -944,7 +944,6 @@ export default function CreatePage() {
                 <CreationEmptyBanner />
                 <div className="creation-chat-intro">
                     <span className="creation-intro-signal" aria-hidden="true" />
-                    <p>{brandName} · AI 影视创作工作台</p>
                     <h1>把脑海里的画面，<span className="creation-intro-emphasis"><span className="is-pink">交给{brandName}</span><span className="is-blue">拍出来</span></span></h1>
                 </div>
                 <div className="creation-empty-composer">
