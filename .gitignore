@@ -65,3 +65,6 @@ camera_language_guide.md
 
 # Local backend executable; never commit build output.
 backend/cmd/server/server
+
+# Local ComfyUI bridge binaries published into the dev public directory.
+web/public/OpenAICanvas-ComfyBridge*
