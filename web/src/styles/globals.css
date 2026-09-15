@@ -15255,6 +15255,7 @@ html .assets-library-page .app-page-header .assets-header-action-buttons .ant-bt
 .assets-filter-item.is-active:hover { background: var(--control-selected-hover-bg); color: var(--control-selected-fg); }
 .assets-filter-item.is-active .assets-filter-count { background: color-mix(in srgb, var(--control-selected-fg) 18%, transparent); color: var(--control-selected-fg); }
 .assets-folder-row { display: flex; min-width: 0; align-items: center; gap: 2px; }
+.assets-folder-row > .assets-filter-item { min-width: 0; width: auto; flex: 1 1 auto; }
 .assets-folder-add, .assets-folder-more { display: grid; width: 26px; height: 26px; flex: 0 0 auto; place-items: center; border: 0; border-radius: var(--r-md); background: transparent; color: color-mix(in srgb, var(--foreground) 42%, transparent); cursor: pointer; }
 .assets-folder-add:hover, .assets-folder-more:hover { background: color-mix(in srgb, var(--foreground) 7%, transparent); color: var(--foreground); }
 @media (min-width: 1024px) {
