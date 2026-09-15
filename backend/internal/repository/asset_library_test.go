@@ -48,6 +48,51 @@ func TestUserAssetsPagePaginatesAndIsolatesUsers(t *testing.T) {
 	}
 }
 
+func TestUserAssetLibraryExcludesEntityRecordsFromPageAndFacets(t *testing.T) {
+	repo, db := newAssetLibraryTestRepository(t)
+	now := time.Now().UTC()
+	assets := []model.Asset{
+		{ID: "image-character", UserID: "user-1", Kind: "image", Category: model.AssetCategoryCharacter, Status: model.AssetVersionStatusConfirmed, FolderID: "", Title: "角色立绘", PayloadJSON: `{"id":"image-character","kind":"image"}`, CreatedAt: now, UpdatedAt: now},
+		{ID: "entity-character", UserID: "user-1", Kind: "entity", Category: model.AssetCategoryCharacter, Status: model.AssetVersionStatusConfirmed, FolderID: "", Title: "角色档案", PayloadJSON: `{"id":"entity-character","kind":"entity"}`, CreatedAt: now, UpdatedAt: now},
+	}
+	for index := range assets {
+		if err := db.Create(&assets[index]).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	page, total, err := repo.UserAssetsPage("user-1", 1, 20, UserAssetPageFilter{Status: "active", Category: string(model.AssetCategoryCharacter)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(page) != 1 || page[0].ID != "image-character" {
+		t.Fatalf("page result = total %d, assets %#v; want only image-character", total, page)
+	}
+
+	kindRows, categoryRows, folderRows, err := repo.UserAssetFacets("user-1", "active")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if facetCount(kindRows, "entity") != 0 || facetCount(kindRows, "image") != 1 {
+		t.Fatalf("kind facets = %#v; want image 1 and entity 0", kindRows)
+	}
+	if facetCount(categoryRows, string(model.AssetCategoryCharacter)) != 1 {
+		t.Fatalf("category facets = %#v; want character 1", categoryRows)
+	}
+	if facetCount(folderRows, "") != 1 {
+		t.Fatalf("folder facets = %#v; want uncategorized 1", folderRows)
+	}
+}
+
+func facetCount(rows []UserAssetFacetRow, key string) int64 {
+	for _, row := range rows {
+		if row.Key == key {
+			return row.Count
+		}
+	}
+	return 0
+}
+
 func TestDeleteAssetFolderMovesAssetsToUncategorized(t *testing.T) {
 	repo, db := newAssetLibraryTestRepository(t)
 	now := time.Now().UTC()
