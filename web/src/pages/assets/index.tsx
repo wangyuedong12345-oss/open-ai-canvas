@@ -39,7 +39,6 @@ type AssetFormValues = {
     title: string;
     coverUrl: string;
     tags: string[];
-    source?: string;
     note?: string;
     content?: string;
     arkAssetId?: string;
@@ -258,7 +257,7 @@ export default function AssetsPage() {
         setImageUploading(false);
         setImageUploadProgress(null);
         setFormKind("text");
-        form.setFieldsValue({ kind: "text", category: "material", folderId: folderFilter !== "all" && folderFilter !== "uncategorized" ? folderFilter : "", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "", arkAssetId: "", portraitCertified: false });
+        form.setFieldsValue({ kind: "text", category: "material", folderId: folderFilter !== "all" && folderFilter !== "uncategorized" ? folderFilter : "", title: "", coverUrl: "", tags: [], note: "", content: "", arkAssetId: "", portraitCertified: false });
         setIsAssetOpen(true);
     };
 
@@ -276,7 +275,6 @@ export default function AssetsPage() {
             title: asset.title,
             coverUrl: asset.coverUrl,
             tags: asset.tags || [],
-            source: asset.source,
             note: asset.note,
             content: asset.kind === "text" ? asset.data.content : "",
             arkAssetId: asset.arkAssetId || "",
@@ -315,7 +313,7 @@ export default function AssetsPage() {
             primaryVersionId: editingAsset?.primaryVersionId,
             coverUrl: values.coverUrl?.trim() || (values.kind === "image" && imageData ? imageData.dataUrl : ""),
             tags: values.tags || [],
-            source: values.source?.trim(),
+            source: editingAsset?.source || "手动添加",
             note: values.note?.trim(),
             arkAssetId: values.arkAssetId?.trim() || undefined,
             portraitCertified: values.portraitCertified || undefined,
@@ -837,14 +835,9 @@ export default function AssetsPage() {
                                 <Switch aria-label="人像认证" />
                             </Form.Item>
                         </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <Form.Item name="source" label="来源">
-                                <Input placeholder="手动添加 / 画布 / 任务中心" />
-                            </Form.Item>
-                            <Form.Item name="note" label="备注">
-                                <Input placeholder="可选" />
-                            </Form.Item>
-                        </div>
+                        <Form.Item name="note" label="备注">
+                            <Input placeholder="可选" />
+                        </Form.Item>
                         {formKind === "text" ? (
                             <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
                                 <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
@@ -1107,9 +1100,7 @@ function AssetCard({
                         {summary}
                     </div>
                 )}
-                <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38">
-                    <span className="truncate">{asset.source || "未标注来源"}</span>
-                    <span aria-hidden="true">·</span>
+                <div className="mt-1 flex min-w-0 items-center text-[var(--fs-tiny)] text-foreground/38">
                     <span className="truncate">{assetProjectRelationLabel(projectRelations, asset)}</span>
                 </div>
             </button>
@@ -1465,7 +1456,6 @@ function assetArchiveFacts(asset: LibraryAsset) {
         facts.push({ label: "格式", value: asset.data.mimeType });
         facts.push({ label: "存储", value: resourceStorageLabel(asset.data.storageKey) });
     }
-    facts.push({ label: "来源", value: asset.source || "未标注" });
     facts.push({ label: "创建", value: formatAssetDateTime(asset.createdAt) });
     facts.push({ label: "更新", value: formatAssetDateTime(asset.updatedAt) });
     return facts;
@@ -1473,9 +1463,17 @@ function assetArchiveFacts(asset: LibraryAsset) {
 
 function assetSummary(asset: LibraryAsset) {
     if (asset.kind === "text") return asset.data.content;
-    if (asset.kind === "audio") return `${formatAssetDuration(asset.data.durationMs)} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
-    if (asset.kind === "model") return `${asset.data.fileName} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
-    return `${asset.data.width}x${asset.data.height} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
+    if (asset.kind === "audio") return `${formatAssetDuration(asset.data.durationMs)} · ${assetFileFormat(asset.data.mimeType)}`;
+    if (asset.kind === "model") return `${asset.data.fileName} · ${assetFileFormat(asset.data.mimeType, asset.data.fileName)}`;
+    return `${asset.data.width}x${asset.data.height} · ${assetFileFormat(asset.data.mimeType)}`;
+}
+
+function assetFileFormat(mimeType?: string, fileName?: string) {
+    const subtype = mimeType?.split(";", 1)[0]?.trim().split("/").pop()?.replace("svg+xml", "svg");
+    const extension = fileName?.split(".").pop();
+    const format = subtype || extension;
+    if (!format) return "未知格式";
+    return format.toLowerCase() === "jpeg" ? "JPEG" : format.toUpperCase();
 }
 
 function StorageTag({ asset }: { asset: LibraryAsset }) {
