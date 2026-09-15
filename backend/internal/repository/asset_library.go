@@ -67,7 +67,8 @@ func (r *Repository) UserAssetFacets(userID string, status string) ([]UserAssetF
 		return nil, nil, nil, err
 	}
 	var categoryRows []UserAssetFacetRow
-	if err := base().Select("category AS key, COUNT(*) AS count").Group("category").Scan(&categoryRows).Error; err != nil {
+	categoryKey := "CASE WHEN category IN ('material', 'other') THEN 'material' ELSE category END"
+	if err := base().Select(categoryKey + " AS key, COUNT(*) AS count").Group(categoryKey).Scan(&categoryRows).Error; err != nil {
 		return nil, nil, nil, err
 	}
 	var folderRows []UserAssetFacetRow
@@ -82,7 +83,11 @@ func userAssetFilteredQuery(query *gorm.DB, filter UserAssetPageFilter, includeS
 		query = query.Where("kind = ?", value)
 	}
 	if value := strings.TrimSpace(filter.Category); value != "" {
-		query = query.Where("category = ?", value)
+		if value == string(model.AssetCategoryMaterial) {
+			query = query.Where("category IN ?", []string{string(model.AssetCategoryMaterial), string(model.AssetCategoryOther)})
+		} else {
+			query = query.Where("category = ?", value)
+		}
 	}
 	if filter.Uncategorized {
 		query = query.Where("folder_id = ''")

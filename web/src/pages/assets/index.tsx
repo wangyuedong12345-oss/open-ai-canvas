@@ -258,7 +258,7 @@ export default function AssetsPage() {
         setImageUploading(false);
         setImageUploadProgress(null);
         setFormKind("text");
-        form.setFieldsValue({ kind: "text", category: "other", folderId: folderFilter !== "all" && folderFilter !== "uncategorized" ? folderFilter : "", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "", arkAssetId: "", portraitCertified: false });
+        form.setFieldsValue({ kind: "text", category: "material", folderId: folderFilter !== "all" && folderFilter !== "uncategorized" ? folderFilter : "", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "", arkAssetId: "", portraitCertified: false });
         setIsAssetOpen(true);
     };
 
@@ -802,7 +802,7 @@ export default function AssetsPage() {
                 destroyOnHidden
             >
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-                    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "other", tags: [] }}>
+                    <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", category: "material", tags: [] }}>
                         <Form.Item name="kind" label="类型">
                             <Select
                                 options={[

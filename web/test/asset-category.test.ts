@@ -9,16 +9,18 @@ describe("asset category contract", () => {
         expect(normalizeAssetCategory("accessory")).toBe("prop");
     });
 
-    test("旧画风迁移为素材，未知值归入其他", () => {
+    test("旧画风、其他和未知值统一归入未分类", () => {
         expect(normalizeAssetCategory("style")).toBe("material");
-        expect(normalizeAssetCategory("unknown")).toBe("other");
-        expect(assetCategoryLabel("material")).toBe("素材");
+        expect(normalizeAssetCategory("other")).toBe("material");
+        expect(normalizeAssetCategory("unknown")).toBe("material");
+        expect(assetCategoryLabel("material")).toBe("未分类");
+        expect(assetCategoryLabel("other")).toBe("未分类");
     });
 
-    test("未分类媒体默认归入素材", () => {
+    test("未分类媒体默认归入统一分类", () => {
         expect(defaultAssetCategoryForKind("image")).toBe("material");
         expect(defaultAssetCategoryForKind("video")).toBe("material");
         expect(defaultAssetCategoryForKind("audio")).toBe("material");
-        expect(defaultAssetCategoryForKind("text")).toBe("other");
+        expect(defaultAssetCategoryForKind("text")).toBe("material");
     });
 });

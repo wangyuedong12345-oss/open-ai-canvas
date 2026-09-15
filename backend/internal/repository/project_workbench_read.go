@@ -233,7 +233,11 @@ func (r *Repository) ProjectAssetsPage(userID string, projectID string, page int
 	var total int64
 	query := r.db.Table("assets").Joins("JOIN project_asset_links ON project_asset_links.asset_id = assets.id").Where("assets.user_id = ? AND project_asset_links.project_id = ?", userID, projectID)
 	if value := strings.TrimSpace(category); value != "" {
-		query = query.Where("assets.category = ?", value)
+		if value == string(model.AssetCategoryMaterial) {
+			query = query.Where("assets.category IN ?", []string{string(model.AssetCategoryMaterial), string(model.AssetCategoryOther)})
+		} else {
+			query = query.Where("assets.category = ?", value)
+		}
 	}
 	if value := strings.TrimSpace(mediaType); value != "" {
 		query = query.Where("assets.kind = ?", value)
@@ -256,10 +260,11 @@ func (r *Repository) ProjectAssetsPage(userID string, projectID string, page int
 
 func (r *Repository) ProjectAssetFacets(projectID string) ([]ProjectAssetCountRow, []ProjectAssetCountRow, error) {
 	var categoryRows []ProjectAssetCountRow
-	if err := r.db.Table("assets").Select("assets.category AS key, COUNT(*) AS count").
+	categoryKey := "CASE WHEN assets.category IN ('material', 'other') THEN 'material' ELSE assets.category END"
+	if err := r.db.Table("assets").Select(categoryKey+" AS key, COUNT(*) AS count").
 		Joins("JOIN project_asset_links pal ON pal.asset_id = assets.id").
 		Where("pal.project_id = ?", projectID).
-		Group("assets.category").Scan(&categoryRows).Error; err != nil {
+		Group(categoryKey).Scan(&categoryRows).Error; err != nil {
 		return nil, nil, err
 	}
 	var folderRows []ProjectAssetCountRow
