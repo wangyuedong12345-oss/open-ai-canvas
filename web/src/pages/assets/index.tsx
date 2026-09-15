@@ -25,7 +25,7 @@ import { exportAssets, readAssetPackage } from "./asset-transfer";
 import { AssetStorageUsage, assetStorageUsageQueryKey } from "./asset-storage-usage";
 import { deleteAssetWithRemoteSync, loadAssetLibraryPage, localSavedRemotePendingMessage, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useUserStore } from "@/stores/use-user-store";
-import { createAssetFolder, deleteAssetFolder, listAssetFolders, listRemoteAssetsPage, moveRemoteAssetsToFolder, updateAssetFolder, type AssetFolder } from "@/services/api/user-data";
+import { createAssetFolder, deleteAssetFolder, listAssetFolders, listRemoteAssetsPage, moveRemoteAssetsToFolder, updateAssetFolder, type AssetFolder, type AssetProjectRelation } from "@/services/api/user-data";
 import { AssetBatchUploadModal } from "./asset-batch-upload-modal";
 import { AssetProjectRelations } from "./asset-project-relations";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
@@ -751,6 +751,7 @@ export default function AssetsPage() {
                                                 <AssetCard
                                                     key={asset.id}
                                                     asset={asset}
+                                                    projectRelations={assetPageQuery.data?.projectRelations?.[asset.id]}
                                                     selected={selectedIds.includes(asset.id)}
                                                     isTrash={viewMode === "trash"}
                                                     retentionDays={retentionDays}
@@ -1043,6 +1044,7 @@ function formatExpirationDate(updatedAt: string, retentionDays: number) {
 
 function AssetCard({
     asset,
+    projectRelations,
     selected,
     isTrash = false,
     retentionDays = 30,
@@ -1058,6 +1060,7 @@ function AssetCard({
     onMoveToFolder,
 }: {
     asset: LibraryAsset;
+    projectRelations?: AssetProjectRelation[];
     selected: boolean;
     isTrash?: boolean;
     retentionDays?: number;
@@ -1107,7 +1110,7 @@ function AssetCard({
                 <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38">
                     <span className="truncate">{asset.source || "未标注来源"}</span>
                     <span aria-hidden="true">·</span>
-                    <span className="truncate">{assetProjectLabel(asset)}</span>
+                    <span className="truncate">{assetProjectRelationLabel(projectRelations, asset)}</span>
                 </div>
             </button>
         </AssetLibraryCard>
@@ -1494,6 +1497,13 @@ function assetProjectLabel(asset: LibraryAsset) {
     const projectName = asset.metadata?.projectName;
     if (typeof projectName === "string" && projectName.trim()) return projectName;
     return Array.isArray(asset.metadata?.projectIds) && asset.metadata.projectIds.length ? "已关联项目" : "未关联项目";
+}
+
+function assetProjectRelationLabel(relations: AssetProjectRelation[] | undefined, asset: LibraryAsset) {
+    if (relations === undefined) return assetProjectLabel(asset);
+    if (relations.length === 0) return "未关联项目";
+    if (relations.length === 1) return relations[0].projectName;
+    return `${relations[0].projectName} 等 ${relations.length} 个项目`;
 }
 
 function assetKindLabel(kind: AssetKind) {

@@ -14,14 +14,15 @@ import (
 )
 
 type UserAssetPage struct {
-	Assets         []json.RawMessage `json:"assets"`
-	KindCounts     map[string]int64  `json:"kindCounts"`
-	CategoryCounts map[string]int64  `json:"categoryCounts"`
-	FolderCounts   map[string]int64  `json:"folderCounts"`
-	Page           int               `json:"page"`
-	PageSize       int               `json:"pageSize"`
-	Total          int64             `json:"total"`
-	HasMore        bool              `json:"hasMore"`
+	Assets           []json.RawMessage                 `json:"assets"`
+	ProjectRelations map[string][]AssetProjectRelation `json:"projectRelations"`
+	KindCounts       map[string]int64                  `json:"kindCounts"`
+	CategoryCounts   map[string]int64                  `json:"categoryCounts"`
+	FolderCounts     map[string]int64                  `json:"folderCounts"`
+	Page             int                               `json:"page"`
+	PageSize         int                               `json:"pageSize"`
+	Total            int64                             `json:"total"`
+	HasMore          bool                              `json:"hasMore"`
 }
 
 type UserAssetPageFilter struct {
@@ -57,17 +58,30 @@ func (s *Service) UserAssetsPage(userID string, page int, pageSize int, filter U
 		return UserAssetPage{}, err
 	}
 	rawAssets := make([]json.RawMessage, 0, len(assets))
+	assetIDs := make([]string, 0, len(assets))
 	for _, asset := range assets {
 		if payload := clientAssetPayload(asset); len(payload) > 0 {
 			rawAssets = append(rawAssets, payload)
+			assetIDs = append(assetIDs, asset.ID)
 		}
+	}
+	relationRows, err := s.repo.AssetProjectRelationsByIDs(userID, assetIDs)
+	if err != nil {
+		return UserAssetPage{}, err
+	}
+	projectRelations := make(map[string][]AssetProjectRelation, len(assetIDs))
+	for _, assetID := range assetIDs {
+		projectRelations[assetID] = []AssetProjectRelation{}
+	}
+	for _, row := range relationRows {
+		projectRelations[row.AssetID] = append(projectRelations[row.AssetID], AssetProjectRelation{ProjectID: row.ProjectID, ProjectName: row.ProjectName, Status: row.Status})
 	}
 	kindRows, categoryRows, folderRows, err := s.repo.UserAssetFacets(userID, filter.Status)
 	if err != nil {
 		return UserAssetPage{}, err
 	}
 	return UserAssetPage{
-		Assets: rawAssets, KindCounts: assetFacetMap(kindRows), CategoryCounts: assetFacetMap(categoryRows), FolderCounts: assetFacetMap(folderRows),
+		Assets: rawAssets, ProjectRelations: projectRelations, KindCounts: assetFacetMap(kindRows), CategoryCounts: assetFacetMap(categoryRows), FolderCounts: assetFacetMap(folderRows),
 		Page: page, PageSize: pageSize, Total: total, HasMore: int64(page*pageSize) < total,
 	}, nil
 }

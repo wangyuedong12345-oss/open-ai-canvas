@@ -19,6 +19,7 @@ export function AssetProjectRelations({ assetId, category }: { assetId: string; 
     const projectsQuery = useQuery({ queryKey: ["projects", "asset-relation-options"], queryFn: () => listProjects() });
     const refresh = () => Promise.all([
         queryClient.invalidateQueries({ queryKey: relationQueryKey(assetId) }),
+        queryClient.invalidateQueries({ queryKey: ["asset-library"] }),
         queryClient.invalidateQueries({ queryKey: ["projects"] }),
     ]);
     const linkMutation = useMutation({

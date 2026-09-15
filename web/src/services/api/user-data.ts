@@ -22,6 +22,7 @@ export type AssetFolder = {
 
 export type RemoteAssetPage = {
     assets: Asset[];
+    projectRelations: Record<string, AssetProjectRelation[]>;
     kindCounts: Record<string, number>;
     categoryCounts: Record<string, number>;
     folderCounts: Record<string, number>;

@@ -25,6 +25,13 @@ type UserAssetFacetRow struct {
 	Count int64
 }
 
+type AssetProjectRelationRow struct {
+	AssetID     string
+	ProjectID   string
+	ProjectName string
+	Status      model.ProjectStatus
+}
+
 func (r *Repository) UserAssetsPage(userID string, page int, pageSize int, filter UserAssetPageFilter) ([]model.Asset, int64, error) {
 	var assets []model.Asset
 	var total int64
@@ -34,6 +41,21 @@ func (r *Repository) UserAssetsPage(userID string, page int, pageSize int, filte
 	}
 	err := query.Order("updated_at desc, id desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&assets).Error
 	return assets, total, err
+}
+
+func (r *Repository) AssetProjectRelationsByIDs(userID string, assetIDs []string) ([]AssetProjectRelationRow, error) {
+	if len(assetIDs) == 0 {
+		return []AssetProjectRelationRow{}, nil
+	}
+	var rows []AssetProjectRelationRow
+	err := r.db.Table("project_asset_links AS links").
+		Select("links.asset_id, projects.id AS project_id, projects.name AS project_name, projects.status").
+		Joins("JOIN projects ON projects.id = links.project_id").
+		Joins("JOIN assets ON assets.id = links.asset_id").
+		Where("assets.user_id = ? AND projects.user_id = ? AND links.asset_id IN ?", userID, userID, assetIDs).
+		Order("projects.updated_at DESC, projects.id ASC").
+		Scan(&rows).Error
+	return rows, err
 }
 
 func (r *Repository) UserAssetFacets(userID string, status string) ([]UserAssetFacetRow, []UserAssetFacetRow, []UserAssetFacetRow, error) {
