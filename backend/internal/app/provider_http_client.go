@@ -192,10 +192,10 @@ func doJSON(req *http.Request, target interface{}) error {
 		return err
 	}
 	if !strings.Contains(mimeType, "json") && !json.Valid(data) {
-		return fmt.Errorf("接口返回非 JSON 内容：%s", mimeType)
+		return providerResponseDecodeError{Err: fmt.Errorf("接口返回非 JSON 内容：%s", mimeType)}
 	}
 	if err := json.Unmarshal(data, target); err != nil {
-		return err
+		return providerResponseDecodeError{Err: err}
 	}
 	if payload, ok := target.(*imageResponse); ok {
 		if payload.Error != nil && payload.Error.Message != "" {
@@ -215,28 +215,6 @@ func doJSON(req *http.Request, target interface{}) error {
 		}
 	}
 	return nil
-}
-
-func withProviderOutboundPolicy(ctx context.Context, config providerConfig) context.Context {
-	if !config.AllowLocalChannel {
-		return ctx
-	}
-	parsed, err := url.Parse(strings.TrimSpace(config.BaseURL))
-	if err != nil || !isExactDesktopLoopbackHost(parsed.Hostname()) {
-		return ctx
-	}
-	return context.WithValue(ctx, providerOutboundPolicyKey{}, providerOutboundPolicyContext{scheme: strings.ToLower(parsed.Scheme), host: strings.ToLower(parsed.Host)})
-}
-
-func providerLoopbackPolicyForRequest(req *http.Request) (OutboundPolicy, bool) {
-	policyContext, ok := req.Context().Value(providerOutboundPolicyKey{}).(providerOutboundPolicyContext)
-	if !ok || policyContext.scheme == "" || policyContext.host == "" {
-		return OutboundPolicy{}, false
-	}
-	if strings.ToLower(req.URL.Scheme) != policyContext.scheme || strings.ToLower(req.URL.Host) != policyContext.host {
-		return OutboundPolicy{}, false
-	}
-	return desktopLoopbackOutboundPolicy(nil), true
 }
 
 func doBinary(req *http.Request) ([]byte, string, error) {
@@ -277,7 +255,7 @@ func doBinaryWithConsumerUntil(req *http.Request, onChunk func(string, []byte), 
 			return nil, "", fmt.Errorf("读取渠道熔断状态失败：%w", err)
 		}
 		if open {
-			return nil, "", errors.New("当前渠道连续失败，已暂时熔断，请稍后重试")
+			return nil, "", providerCircuitOpenError{}
 		}
 		slotID := channelID
 		if slotID == "" {
@@ -293,21 +271,12 @@ func doBinaryWithConsumerUntil(req *http.Request, onChunk func(string, []byte), 
 		}
 		defer release()
 	}
-	policy, loopback := providerLoopbackPolicyForRequest(req)
-	if loopback {
-		if _, err := validateOutboundURLWithPolicy(req.URL.String(), policy); err != nil {
-			recordProviderRequest(req, startedAt, 0, nil, err)
-			return nil, "", err
-		}
-	} else if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
+	if _, err := ValidateOutboundURL(req.URL.String()); err != nil {
 		recordProviderRequest(req, startedAt, 0, nil, err)
 		return nil, "", err
 	}
 	ApplyDefaultOutboundHeaders(req)
 	client := OutboundHTTPClient(requestTimeout)
-	if loopback {
-		client = outboundHTTPClientWithPolicy(requestTimeout, policy)
-	}
 	resp, err := client.Do(req)
 	if err != nil {
 		if runtimeService != nil {
