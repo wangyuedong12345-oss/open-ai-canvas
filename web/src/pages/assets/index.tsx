@@ -655,7 +655,7 @@ export default function AssetsPage() {
                 </div>
 
                 <div className="canvas-library-frame assets-library-frame">
-                    <div className="grid min-h-0 gap-4 lg:grid-cols-[176px_minmax(0,1fr)]">
+                    <div className="grid min-h-0 gap-4 lg:grid-cols-[208px_minmax(0,1fr)]">
                         <aside className="thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-x-hidden lg:overflow-y-auto lg:pr-3">
                             <div>
                                 <div className="mb-1.5 flex items-center justify-between px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">
@@ -663,12 +663,18 @@ export default function AssetsPage() {
                                     <button type="button" className="assets-folder-add" title="新建文件夹" aria-label="新建文件夹" onClick={() => { setFolderName(""); setFolderEditor("new"); }}><FolderPlus className="size-3.5" /></button>
                                 </div>
                                 <div className="space-y-0.5">
-                                    <button type="button" aria-pressed={folderFilter === "all"} className={`assets-filter-item w-full ${folderFilter === "all" ? "is-active" : ""}`} onClick={() => { setFolderFilter("all"); setPage(1); }}>
-                                        <span className="assets-filter-item-label">全部素材</span><span className="assets-filter-count">{folderCountTotal}</span>
-                                    </button>
-                                    <button type="button" aria-pressed={folderFilter === "uncategorized"} className={`assets-filter-item w-full ${folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => { setFolderFilter(folderFilter === "uncategorized" ? "all" : "uncategorized"); setPage(1); }}>
-                                        <span className="assets-filter-item-label">未整理</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
-                                    </button>
+                                    <div className="assets-folder-row">
+                                        <button type="button" aria-pressed={folderFilter === "all"} className={`assets-filter-item ${folderFilter === "all" ? "is-active" : ""}`} onClick={() => { setFolderFilter("all"); setPage(1); }}>
+                                            <span className="assets-filter-item-label">全部素材</span><span className="assets-filter-count">{folderCountTotal}</span>
+                                        </button>
+                                        <span className="assets-folder-action-spacer" aria-hidden="true" />
+                                    </div>
+                                    <div className="assets-folder-row">
+                                        <button type="button" aria-pressed={folderFilter === "uncategorized"} className={`assets-filter-item ${folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => { setFolderFilter(folderFilter === "uncategorized" ? "all" : "uncategorized"); setPage(1); }}>
+                                            <span className="assets-filter-item-label">未整理</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
+                                        </button>
+                                        <span className="assets-folder-action-spacer" aria-hidden="true" />
+                                    </div>
                                     {folders.map((folder) => (
                                         <div key={folder.id} className="assets-folder-row">
                                             <button type="button" aria-pressed={folderFilter === folder.id} className={`assets-filter-item min-w-0 flex-1 ${folderFilter === folder.id ? "is-active" : ""}`} onClick={() => { setFolderFilter(folderFilter === folder.id ? "all" : folder.id); setPage(1); }}>
