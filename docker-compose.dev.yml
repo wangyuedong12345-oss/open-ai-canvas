@@ -66,7 +66,7 @@ services:
       - web-node-modules:/workspace/web/node_modules
       - web-bun-cache:/root/.bun/install/cache
     ports:
-      - "${CANVAS_WEB_HOST_PORT:-3000}:3000"
+      - "127.0.0.1:${CANVAS_WEB_HOST_PORT:-3000}:3000"
     depends_on:
       - backend
     init: true
