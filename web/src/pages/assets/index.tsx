@@ -160,6 +160,12 @@ export default function AssetsPage() {
         placeholderData: keepPreviousData,
     });
 
+    const activeFolderStatsQuery = useQuery({
+        queryKey: [...ASSET_LIBRARY_QUERY_KEY, "active-folder-stats"],
+        queryFn: ({ signal }) => listRemoteAssetsPage({ page: 1, pageSize: 1, status: "active", signal }),
+        enabled: Boolean(userId),
+    });
+
     const localVisibleAssets = useMemo(() => {
         const start = (page - 1) * pageSize;
         return filteredAssets.slice(start, start + pageSize);
@@ -174,8 +180,9 @@ export default function AssetsPage() {
     const totalAssets = assetPageQuery.data?.total ?? filteredAssets.length;
     const kindCounts = useMemo(() => assetCountMap(kindOptions, assetPageQuery.data?.kindCounts, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.kind), [activeAssets, assetPageQuery.data?.kindCounts, trashAssets, viewMode]);
     const categoryCounts = useMemo(() => assetCountMap(categoryOptions, assetPageQuery.data?.categoryCounts, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.category || "other"), [activeAssets, assetPageQuery.data?.categoryCounts, trashAssets, viewMode]);
-    const folderCounts = assetPageQuery.data?.folderCounts || {};
-    const folderCountTotal = assetPageQuery.data ? Object.values(folderCounts).reduce((sum, count) => sum + count, 0) : activeAssets.length;
+    const folderCounts = activeFolderStatsQuery.data?.folderCounts || {};
+    const folderCountTotal = activeFolderStatsQuery.data?.total || 0;
+    const headerAssetCount = viewMode === "trash" ? totalAssets : folderCountTotal;
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(totalAssets / pageSize));
@@ -235,6 +242,17 @@ export default function AssetsPage() {
         } catch (error) {
             message.error(error instanceof Error ? error.message : "文件夹删除失败");
         }
+    };
+
+    const selectFolder = (nextFolder: AssetFolderFilter) => {
+        const leavingTrash = viewMode === "trash";
+        setViewMode("library");
+        setFolderFilter((current) => {
+            if (leavingTrash || nextFolder === "all") return nextFolder;
+            return current === nextFolder ? "all" : nextFolder;
+        });
+        setPage(1);
+        setSelectedIds([]);
     };
 
     const moveAssetsToFolder = async (assetIds: string[], folderId: string) => {
@@ -427,6 +445,7 @@ export default function AssetsPage() {
         await flushAssetStorePersistence();
         try {
             await saveRemoteUserDataNow();
+            await invalidateAssetLibrary();
             message.success(`已还原素材「${asset.title}」`);
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("已在本地还原", error));
@@ -443,6 +462,7 @@ export default function AssetsPage() {
         await flushAssetStorePersistence();
         try {
             await saveRemoteUserDataNow();
+            await invalidateAssetLibrary();
             message.success(`已还原 ${count} 个素材`);
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("已在本地还原", error));
@@ -454,6 +474,7 @@ export default function AssetsPage() {
         await flushAssetStorePersistence();
         try {
             await saveRemoteUserDataNow();
+            await invalidateAssetLibrary();
             message.success(`已将「${asset.title}」移入回收站`);
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("已移入回收站", error));
@@ -470,6 +491,7 @@ export default function AssetsPage() {
         await flushAssetStorePersistence();
         try {
             await saveRemoteUserDataNow();
+            await invalidateAssetLibrary();
             message.success(`已将 ${count} 个素材移入回收站`);
         } catch (error) {
             message.warning(localSavedRemotePendingMessage("已移入回收站", error));
@@ -525,7 +547,7 @@ export default function AssetsPage() {
                     <PageHeader
                         title={viewMode === "trash" ? "素材库 / 回收站" : "素材库"}
                         description={viewMode === "trash" ? "已删除画布或手动归档的临时素材，可随时还原或彻底清理。" : "管理文本、图片、视频、音频和 3D 模型素材。"}
-                        meta={<span className="app-projects-header-meta assets-header-meta">{validAssets.length} 个素材</span>}
+                        meta={<span className="app-projects-header-meta assets-header-meta">{headerAssetCount} 个素材</span>}
                         actions={
                             <div className="assets-header-actions">
                                 <div className="assets-header-action-buttons">
@@ -589,13 +611,6 @@ export default function AssetsPage() {
                     <ListToolbar
                         className="library-toolbar"
                         active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all" || folderFilter !== "all")}
-                        onReset={() => {
-                            setKeyword("");
-                            setKindFilter("all");
-                            setCategoryFilter("all");
-                            setFolderFilter("all");
-                            setPage(1);
-                        }}
                         filtersAlwaysVisible
                         filters={
                             <>
@@ -619,6 +634,9 @@ export default function AssetsPage() {
                                         setPage(1);
                                     }}
                                 />
+                                {kindFilter !== "all" ? <Tag closable onClose={() => { setKindFilter("all"); setPage(1); }}>类型：{kindOptions.find((option) => option.value === kindFilter)?.label}</Tag> : null}
+                                {categoryFilter !== "all" ? <Tag closable onClose={() => { setCategoryFilter("all"); setPage(1); }}>用途：{assetCategoryLabel(categoryFilter)}</Tag> : null}
+                                {folderFilter !== "all" ? <Tag closable onClose={() => { setFolderFilter("all"); setPage(1); }}>文件夹：{folderFilter === "uncategorized" ? "未整理" : folders.find((folder) => folder.id === folderFilter)?.name || "未知"}</Tag> : null}
                             </>
                         }
                         trailing={
@@ -629,15 +647,6 @@ export default function AssetsPage() {
                                 options={[{ label: "舒适 · 6 列", value: 6 }, { label: "标准 · 8 列", value: 8 }, { label: "紧凑 · 10 列", value: 10 }]}
                                 onChange={(value) => setGridDensity(value as AssetGridDensity)}
                             />
-                        }
-                        activeFilters={
-                            kindFilter !== "all" || categoryFilter !== "all" || folderFilter !== "all" ? (
-                                <>
-                                    {kindFilter !== "all" ? <Tag closable onClose={() => { setKindFilter("all"); setPage(1); }}>类型：{kindOptions.find((option) => option.value === kindFilter)?.label}</Tag> : null}
-                                    {categoryFilter !== "all" ? <Tag closable onClose={() => { setCategoryFilter("all"); setPage(1); }}>用途：{assetCategoryLabel(categoryFilter)}</Tag> : null}
-                                    {folderFilter !== "all" ? <Tag closable onClose={() => { setFolderFilter("all"); setPage(1); }}>文件夹：{folderFilter === "uncategorized" ? "未整理" : folders.find((folder) => folder.id === folderFilter)?.name || "未知"}</Tag> : null}
-                                </>
-                            ) : null
                         }
                     >
                         <Input
@@ -664,21 +673,21 @@ export default function AssetsPage() {
                                 </div>
                                 <div className="space-y-0.5">
                                     <div className="assets-folder-row">
-                                        <button type="button" aria-pressed={folderFilter === "all"} className={`assets-filter-item ${folderFilter === "all" ? "is-active" : ""}`} onClick={() => { setFolderFilter("all"); setPage(1); }}>
+                                        <button type="button" aria-pressed={viewMode === "library" && folderFilter === "all"} className={`assets-filter-item ${viewMode === "library" && folderFilter === "all" ? "is-active" : ""}`} onClick={() => selectFolder("all")}>
                                             <span className="assets-filter-item-label">全部素材</span><span className="assets-filter-count">{folderCountTotal}</span>
                                         </button>
                                         <span className="assets-folder-action-spacer" aria-hidden="true" />
                                     </div>
                                     <div className="assets-folder-row">
-                                        <button type="button" aria-pressed={folderFilter === "uncategorized"} className={`assets-filter-item ${folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => { setFolderFilter(folderFilter === "uncategorized" ? "all" : "uncategorized"); setPage(1); }}>
-                                            <span className="assets-filter-item-label">未整理</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
+                                        <button type="button" aria-pressed={viewMode === "library" && folderFilter === "uncategorized"} className={`assets-filter-item ${viewMode === "library" && folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => selectFolder("uncategorized")}>
+                                            <span className="assets-filter-item-label">未整理</span><span className="assets-filter-count">{folderCounts[""] ?? 0}</span>
                                         </button>
                                         <span className="assets-folder-action-spacer" aria-hidden="true" />
                                     </div>
                                     {folders.map((folder) => (
                                         <div key={folder.id} className="assets-folder-row">
-                                            <button type="button" aria-pressed={folderFilter === folder.id} className={`assets-filter-item min-w-0 flex-1 ${folderFilter === folder.id ? "is-active" : ""}`} onClick={() => { setFolderFilter(folderFilter === folder.id ? "all" : folder.id); setPage(1); }}>
-                                                <span className="assets-filter-item-label min-w-0 truncate">{folder.name}</span><span className="assets-filter-count">{folderCounts[folder.id] ?? activeAssets.filter((asset) => asset.folderId === folder.id).length}</span>
+                                            <button type="button" aria-pressed={viewMode === "library" && folderFilter === folder.id} className={`assets-filter-item min-w-0 flex-1 ${viewMode === "library" && folderFilter === folder.id ? "is-active" : ""}`} onClick={() => selectFolder(folder.id)}>
+                                                <span className="assets-filter-item-label min-w-0 truncate">{folder.name}</span><span className="assets-filter-count">{folderCounts[folder.id] ?? 0}</span>
                                             </button>
                                             <Dropdown trigger={["click"]} menu={{ items: [{ key: "rename", icon: <PencilLine className="size-3.5" />, label: "重命名", onClick: () => { setFolderName(folder.name); setFolderEditor(folder); } }, { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除文件夹", onClick: () => void removeFolder(folder) }] }}>
                                                 <button type="button" className="assets-folder-more" aria-label={`管理文件夹 ${folder.name}`} title="管理文件夹"><MoreHorizontal className="size-3.5" /></button>
@@ -689,31 +698,36 @@ export default function AssetsPage() {
                             </div>
                             <div className="mt-6 border-t border-border/40 pt-3">
                                 <div className="mb-1.5 px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">垃圾箱与归档</div>
-                                <button
-                                    type="button"
-                                    aria-pressed={viewMode === "trash"}
-                                    className={cn(
-                                        "assets-filter-item w-full transition-colors",
-                                        viewMode === "trash" ? "is-active !bg-amber-500/15 !text-amber-600 dark:!text-amber-400 font-semibold shadow-sm" : "text-foreground/65 hover:text-foreground",
-                                    )}
-                                    onClick={() => {
-                                        if (viewMode === "trash") {
-                                            setViewMode("library");
+                                <div className="assets-folder-row">
+                                    <button
+                                        type="button"
+                                        aria-pressed={viewMode === "trash"}
+                                        className={cn(
+                                            "assets-filter-item w-full transition-colors",
+                                            viewMode === "trash" ? "is-active !bg-amber-500/15 !text-amber-600 dark:!text-amber-400 font-semibold shadow-sm" : "text-foreground/65 hover:text-foreground",
+                                        )}
+                                        onClick={() => {
+                                            if (viewMode === "trash") {
+                                                setViewMode("library");
                                         } else {
                                             setViewMode("trash");
+                                            setKeyword("");
                                             setKindFilter("all");
                                             setCategoryFilter("all");
+                                            setFolderFilter("all");
                                         }
-                                        setPage(1);
-                                        setSelectedIds([]);
-                                    }}
-                                >
-                                    <span className="assets-filter-item-label flex items-center gap-1.5">
-                                        <Trash2 className="size-3.5" />
-                                        <span>回收站</span>
-                                    </span>
-                                    <span className="assets-filter-count">{trashAssets.length}</span>
-                                </button>
+                                            setPage(1);
+                                            setSelectedIds([]);
+                                        }}
+                                    >
+                                        <span className="assets-filter-item-label flex items-center gap-1.5">
+                                            <Trash2 className="size-3.5" />
+                                            <span>回收站</span>
+                                        </span>
+                                        <span className="assets-filter-count">{trashAssets.length}</span>
+                                    </button>
+                                    <span className="assets-folder-action-spacer" aria-hidden="true" />
+                                </div>
                             </div>
                         </aside>
                         <section className="min-w-0">
@@ -1097,12 +1111,12 @@ function AssetCard({
     return (
         <AssetLibraryCard selected={selected}>
             <AssetCover asset={asset} selected={selected} isTrash={isTrash} onSelect={onSelect} onOpen={onOpen} menuItems={menuItems} />
-            <button type="button" className="block w-full px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
-                <div className="flex min-w-0 items-center justify-between gap-2">
-                    <h2 className="truncate text-[var(--fs-body)] font-semibold text-foreground" title={asset.title}>
+            <button type="button" className="assets-card-body block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
+                <div className="assets-card-heading flex min-w-0 justify-between gap-2">
+                    <h2 className="assets-card-title truncate font-semibold text-foreground" title={asset.title}>
                         {asset.title}
                     </h2>
-                    <span className="shrink-0 text-[var(--fs-tiny)] tabular-nums text-foreground/38">{formatAssetTime(asset.updatedAt)}</span>
+                    <span className="assets-card-date shrink-0 tabular-nums text-foreground/38">{formatAssetTime(asset.updatedAt)}</span>
                 </div>
                 {isTrash ? (
                     <div className="mt-1 flex items-center gap-1 text-[var(--fs-tiny)] font-medium text-amber-600 dark:text-amber-400" title={formatExpirationDate(asset.updatedAt, retentionDays)}>
@@ -1114,7 +1128,7 @@ function AssetCard({
                         {summary}
                     </div>
                 )}
-                <div className="mt-1 flex min-w-0 items-center text-[var(--fs-tiny)] text-foreground/38">
+                <div className="assets-card-relation mt-1 flex min-w-0 items-center text-foreground/38">
                     <span className="truncate">{assetProjectRelationLabel(projectRelations, asset)}</span>
                 </div>
             </button>

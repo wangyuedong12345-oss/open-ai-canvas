@@ -492,6 +492,8 @@ function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeContentPro
     const previewRef = useRef<HTMLDivElement>(null);
     const nearViewport = useNearViewport(previewRef);
     const previewUrl = canvasNodeVideoPreviewUrl(node);
+    const [failedPreviewUrl, setFailedPreviewUrl] = useState("");
+    const effectivePreviewUrl = previewUrl && previewUrl !== failedPreviewUrl ? previewUrl : "";
     const { updateMetadata } = useCanvasNodeActions();
     const updateMetadataRef = useRef(updateMetadata);
     const [hydrating, setHydrating] = useState(false);
@@ -509,7 +511,11 @@ function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeContentPro
     }, [updateMetadata]);
 
     useEffect(() => {
-        if (previewUrl || !nearViewport || !node.metadata?.content || !updateMetadataRef.current) {
+        if (previewUrl !== failedPreviewUrl) setFailedPreviewUrl("");
+    }, [failedPreviewUrl, previewUrl]);
+
+    useEffect(() => {
+        if (effectivePreviewUrl || !nearViewport || !node.metadata?.content || !updateMetadataRef.current) {
             setHydrating(false);
             return;
         }
@@ -524,11 +530,11 @@ function InactiveVideoPreview({ node, theme, onPlay }: Pick<CanvasNodeContentPro
                 if (!controller.signal.aborted) setHydrating(false);
             });
         return () => controller.abort();
-    }, [nearViewport, node.id, node.metadata?.content, node.metadata?.storageKey, previewUrl]);
+    }, [effectivePreviewUrl, nearViewport, node.id, node.metadata?.content, node.metadata?.storageKey]);
 
-    if (previewUrl) {
+    if (effectivePreviewUrl) {
         return <div ref={previewRef} className="group/video-preview relative size-full overflow-hidden rounded-[var(--node-radius)] bg-black">
-            <img src={previewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" />
+            <img src={effectivePreviewUrl} alt={`${node.title || "视频"} 静态预览`} loading="lazy" decoding="async" draggable={false} className="pointer-events-none size-full select-none object-contain" onError={() => setFailedPreviewUrl(effectivePreviewUrl)} />
             <VideoPreviewPlayButton title={node.title || "视频"} onPlay={onPlay} />
         </div>;
     }
