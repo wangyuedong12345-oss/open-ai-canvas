@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { App, Button, Form, Input, Modal, Select } from "antd";
-import { ArrowRight, BookOpenText, FileText, FolderKanban, Images, LayoutGrid, Palette, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import { App, Button, Dropdown, Form, Input, Modal, Select } from "antd";
+import { Archive, ArrowRight, BookOpenText, FileText, FolderKanban, Image as ImageIcon, Images, LayoutGrid, MoreHorizontal, Palette, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
 import { CollectionGrid, ListToolbar, PageHeader, WorkspacePage } from "@/components/layout/workspace-page";
@@ -14,7 +14,7 @@ import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-wor
 import { settingsPath } from "@/lib/settings-navigation";
 import { PromptTemplateOperation, parseGeneratedStory, promptTemplateTaskPlaceholder, shortDramaOutlineVariables } from "@/lib/prompts";
 import { runBackendGenerationTask } from "@/services/api/generation-task";
-import { createProject, deleteProject, importProjectUnits, listProjects, type ProjectSummary } from "@/services/api/projects";
+import { createProject, deleteProject, importProjectUnits, listProjects, updateProject, type ProjectSummary } from "@/services/api/projects";
 import { modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
 
 import { sourceTypeLabel } from "./detail/shared";
@@ -46,6 +46,8 @@ export default function ProjectsPage() {
     const [generating, setGenerating] = useState(false);
     const [generationStatus, setGenerationStatus] = useState("");
     const [generationPreview, setGenerationPreview] = useState("");
+    const [renameProject, setRenameProject] = useState<ProjectSummary["project"] | null>(null);
+    const [renameName, setRenameName] = useState("");
     const createOpen = searchParams.get("create") === "1";
     const setCreateOpen = (open: boolean) => {
         const next = new URLSearchParams(searchParams);
@@ -152,6 +154,24 @@ export default function ProjectsPage() {
         },
         onError: (error) => message.error(error instanceof Error ? error.message : "项目删除失败"),
     });
+    const renameMutation = useMutation({
+        mutationFn: ({ projectId, name }: { projectId: string; name: string }) => updateProject(projectId, { name }),
+        onSuccess: () => {
+            setRenameProject(null);
+            setRenameName("");
+            void queryClient.invalidateQueries({ queryKey: ["projects"] });
+            message.success("项目已重命名");
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : "项目重命名失败"),
+    });
+    const statusMutation = useMutation({
+        mutationFn: ({ projectId, status }: { projectId: string; status: "active" | "archived" }) => updateProject(projectId, { status }),
+        onSuccess: (_, variables) => {
+            void queryClient.invalidateQueries({ queryKey: ["projects"] });
+            message.success(variables.status === "archived" ? "项目已归档" : "项目已恢复");
+        },
+        onError: (error) => message.error(error instanceof Error ? error.message : "项目状态更新失败"),
+    });
     const confirmDeleteProject = (projectId: string, name: string) => {
         modal.confirm({
             title: "删除项目",
@@ -160,6 +180,24 @@ export default function ProjectsPage() {
             okButtonProps: { danger: true, loading: deleteMutation.isPending },
             cancelText: "取消",
             onOk: () => deleteMutation.mutate(projectId),
+        });
+    };
+    const openRenameProject = (project: ProjectSummary["project"]) => {
+        setRenameProject(project);
+        setRenameName(project.name);
+    };
+    const changeProjectStatus = (project: ProjectSummary["project"]) => {
+        const nextStatus = project.status === "archived" ? "active" : "archived";
+        if (nextStatus === "active") {
+            statusMutation.mutate({ projectId: project.id, status: nextStatus });
+            return;
+        }
+        modal.confirm({
+            title: "归档项目",
+            content: `归档「${project.name}」后将暂停创建画布和生成任务，可以随时恢复。`,
+            okText: "归档",
+            cancelText: "取消",
+            onOk: () => statusMutation.mutateAsync({ projectId: project.id, status: nextStatus }),
         });
     };
     const allProjects = useMemo(() => query.data?.pages.flatMap((page) => page.projects) || [], [query.data]);
@@ -250,7 +288,16 @@ export default function ProjectsPage() {
             {query.isLoading ? <WorkspaceLoadingState label="正在整理项目" detail="读取章节、画布与资产进度" /> : null}
             {!query.isLoading && !hasInitialError && rows.length ? (
                 <CollectionGrid className="library-grid project-library-grid">
-                    {rows.map((row) => <ProjectRow key={row.project.id} row={row} onDelete={() => confirmDeleteProject(row.project.id, row.project.name)} />)}
+                    {rows.map((row) => (
+                        <ProjectRow
+                            key={row.project.id}
+                            row={row}
+                            onRename={() => openRenameProject(row.project)}
+                            onChangeCover={() => navigate(`/projects/${row.project.id}/settings`)}
+                            onChangeStatus={() => changeProjectStatus(row.project)}
+                            onDelete={() => confirmDeleteProject(row.project.id, row.project.name)}
+                        />
+                    ))}
                 </CollectionGrid>
             ) : null}
             {!query.isLoading && !hasInitialError ? <div ref={loadMoreRef} className="library-load-more" aria-live="polite">
@@ -281,6 +328,20 @@ export default function ProjectsPage() {
                     <p className="-mt-1 mb-5 text-xs leading-5 text-foreground/48">创建后先进入项目概览。章节、画风和参考资产可以逐步补充。</p>
                     <div className="flex justify-end gap-2"><Button onClick={() => setCreateOpen(false)}>取消</Button><Button type="primary" htmlType="submit" loading={mutation.isPending}>创建项目</Button></div>
                 </Form>
+            </Modal>
+            <Modal
+                className="workspace-modal workspace-modal-compact"
+                title="重命名项目"
+                open={Boolean(renameProject)}
+                okText="保存"
+                cancelText="取消"
+                okButtonProps={{ loading: renameMutation.isPending, disabled: !renameName.trim() || renameName.trim() === renameProject?.name }}
+                onCancel={() => { setRenameProject(null); setRenameName(""); }}
+                onOk={() => renameProject && renameMutation.mutate({ projectId: renameProject.id, name: renameName.trim() })}
+            >
+                <Input autoFocus value={renameName} maxLength={240} showCount onChange={(event) => setRenameName(event.target.value)} onPressEnter={() => {
+                    if (renameProject && renameName.trim() && renameName.trim() !== renameProject.name && !renameMutation.isPending) renameMutation.mutate({ projectId: renameProject.id, name: renameName.trim() });
+                }} />
             </Modal>
             <CanvasStylePickerModal
                 open={stylePickerOpen}
@@ -358,7 +419,7 @@ function generationStepDone(label: string, status: string) {
     return false;
 }
 
-function ProjectRow({ row, onDelete }: { row: ProjectSummary; onDelete: () => void }) {
+function ProjectRow({ row, onRename, onChangeCover, onChangeStatus, onDelete }: { row: ProjectSummary; onRename: () => void; onChangeCover: () => void; onChangeStatus: () => void; onDelete: () => void }) {
     const completion = projectSummaryCompletion(row);
     const stage = projectSummaryStage(row);
     const projectStyle = resolveProjectCanvasStyle(row.project.stylePresetId, row.project.styleProfileJson);
@@ -371,19 +432,39 @@ function ProjectRow({ row, onDelete }: { row: ProjectSummary; onDelete: () => vo
                 <span className="project-library-cover-scrim" />
                 <span className="project-library-cover-ratio">{row.project.aspectRatio}</span>
                 <span className="project-library-cover-stage">{stage.label}</span>
-                <button
-                    type="button"
-                    className="project-library-cover-delete"
-                    title="删除项目"
-                    aria-label={`删除项目 ${row.project.name}`}
-                    onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onDelete();
+                <Dropdown
+                    trigger={["click"]}
+                    menu={{
+                        items: [
+                            { key: "rename", icon: <Pencil className="size-3.5" />, label: "重命名" },
+                            { key: "cover", icon: <ImageIcon className="size-3.5" />, label: "修改主图" },
+                            { key: "archive", icon: row.project.status === "archived" ? <RotateCcw className="size-3.5" /> : <Archive className="size-3.5" />, label: row.project.status === "archived" ? "恢复项目" : "归档项目" },
+                            { type: "divider" },
+                            { key: "delete", icon: <Trash2 className="size-3.5" />, label: "删除项目", danger: true },
+                        ],
+                        onClick: ({ key, domEvent }) => {
+                            domEvent.preventDefault();
+                            domEvent.stopPropagation();
+                            if (key === "rename") onRename();
+                            else if (key === "cover") onChangeCover();
+                            else if (key === "archive") onChangeStatus();
+                            else if (key === "delete") onDelete();
+                        },
                     }}
                 >
-                    <Trash2 className="size-3.5" />
-                </button>
+                    <button
+                        type="button"
+                        className="project-library-cover-menu"
+                        title="项目操作"
+                        aria-label={`管理项目 ${row.project.name}`}
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }}
+                    >
+                        <MoreHorizontal className="size-4" />
+                    </button>
+                </Dropdown>
             </span>
             <span className="project-library-body">
                 <span className="project-library-heading"><strong title={row.project.name}>{row.project.name}</strong>{row.project.status === "archived" ? <em>已归档</em> : null}<ArrowRight className="project-library-arrow size-4" /></span>

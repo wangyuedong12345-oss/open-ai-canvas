@@ -27,6 +27,8 @@
 
 - [用户诊断包设计](design/user-diagnostic-bundle.mdx)：面向普通用户的一键日志导出、前后端链路关联、脱敏、权限与排障方案。
 
+- [Taiyi 素材体系改进 PRD](design/asset-library-product-redesign.mdx)：统一临时结果、项目素材、我的素材与外部素材的产品边界，定义项目关联、使用位置、同步恢复、删除语义、迁移和分期验收方案（待评审，未实施）。
+
 - [肖像权可识别性排查画布插件实施规格](design/portrait-clearance-canvas-plugin.mdx)：TypeScript 重写、画布节点与全屏工作台、项目模型复用、本机 ONNX/百度识图/候选去重、任务合同、报告和验收方案。
 
 - [AI 审美批改画布插件方案](design/ai-art-critique-solution.md)：云端视觉分析、并行 Reviewer、问题定位、AI 修改提示词与前端 SVG 标注的职责边界和交互设计。

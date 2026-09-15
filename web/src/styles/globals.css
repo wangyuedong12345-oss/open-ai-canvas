@@ -5419,7 +5419,7 @@
     .project-library-cover-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 420ms var(--motion-ease-out), filter 420ms ease-out; }
     .library-card:hover .project-library-cover-art, .library-card:focus-within .project-library-cover-art { transform: scale(1.035); filter: saturate(1.08); }
     .project-library-cover-scrim { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.08) 0%, rgba(0, 0, 0, 0.42) 100%); }
-    .project-library-cover-delete {
+    .project-library-cover-menu {
         position: absolute;
         z-index: 3;
         right: 10px;
@@ -5435,7 +5435,7 @@
         backdrop-filter: blur(8px);
         transition: background-color 180ms ease-out, color 180ms ease-out, transform 180ms var(--motion-ease-out);
     }
-    .project-library-cover-delete:hover { background: color-mix(in srgb, var(--destructive) 86%, transparent); color: var(--destructive-foreground); transform: scale(1.06); }
+    .project-library-cover-menu:hover { background: rgba(10, 10, 10, 0.78); color: #fff; transform: scale(1.06); }
     .project-library-cover-icon { position: relative; z-index: 1; display: grid; place-items: center; width: 56px; height: 56px; border-radius: var(--r-md); background: var(--project-library-icon-surface); color: color-mix(in srgb, var(--foreground) 58%, transparent); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18); }
     .project-library-cover-icon svg { width: 26px; height: 26px; }
     .project-library-cover-ratio, .project-library-cover-stage { position: absolute; z-index: 2; bottom: 14px; border-radius: var(--r-full); background: color-mix(in srgb, var(--background) 62%, transparent); padding: 5px 10px; color: color-mix(in srgb, var(--foreground) 74%, transparent); font-size: var(--fs-tiny); backdrop-filter: blur(8px); }
