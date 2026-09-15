@@ -1529,6 +1529,17 @@ func (r *Repository) ProjectAssetLinks(projectID string) ([]model.ProjectAssetLi
 	return links, err
 }
 
+func (r *Repository) ProjectsForAsset(userID string, assetID string) ([]model.Project, error) {
+	var projects []model.Project
+	err := r.db.Table("projects").
+		Select("projects.*").
+		Joins("JOIN project_asset_links ON project_asset_links.project_id = projects.id").
+		Where("projects.user_id = ? AND project_asset_links.asset_id = ?", userID, assetID).
+		Order("projects.updated_at DESC, projects.id ASC").
+		Scan(&projects).Error
+	return projects, err
+}
+
 func (r *Repository) ProjectAssetLink(projectID string, assetID string) (*model.ProjectAssetLink, error) {
 	var link model.ProjectAssetLink
 	if err := r.db.First(&link, "project_id = ? AND asset_id = ?", projectID, assetID).Error; err != nil {

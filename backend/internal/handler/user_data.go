@@ -547,6 +547,19 @@ func RegisterUserDataRoutes(r *gin.RouterGroup, svc *service.Service) {
 		}
 		ok(c, gin.H{"asset": asset})
 	})
+	r.GET("/assets/:id/projects", func(c *gin.Context) {
+		user, err := currentUser(c, svc)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		projects, err := svc.AssetProjectRelations(user.ID, c.Param("id"))
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, gin.H{"projects": projects})
+	})
 	r.PUT("/assets/:id", func(c *gin.Context) {
 		user, err := currentUser(c, svc)
 		if err != nil {

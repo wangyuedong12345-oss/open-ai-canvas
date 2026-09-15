@@ -31,6 +31,12 @@ export type RemoteAssetPage = {
     hasMore: boolean;
 };
 
+export type AssetProjectRelation = {
+    projectId: string;
+    projectName: string;
+    status: "active" | "archived" | string;
+};
+
 export type RemoteUserDataSnapshot = {
     assets: Asset[];
     projects: CanvasProject[];
@@ -94,6 +100,10 @@ export function moveRemoteAssetsToFolder(assetIds: string[], folderId = "") {
 
 export function getRemoteAsset(id: string) {
     return http.get<{ asset: Asset }>(`/assets/${encodeURIComponent(id)}`);
+}
+
+export function listAssetProjectRelations(id: string) {
+    return http.get<{ projects: AssetProjectRelation[] }>(`/assets/${encodeURIComponent(id)}/projects`);
 }
 
 export function getRemoteAssetsByIds(ids: string[]) {

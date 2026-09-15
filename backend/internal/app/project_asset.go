@@ -57,6 +57,12 @@ type ProjectAssetSummary struct {
 	Character        *CharacterCardSummary    `json:"character,omitempty"`
 }
 
+type AssetProjectRelation struct {
+	ProjectID   string              `json:"projectId"`
+	ProjectName string              `json:"projectName"`
+	Status      model.ProjectStatus `json:"status"`
+}
+
 type ProjectAssetFilter struct {
 	Category  string
 	MediaType string
@@ -104,6 +110,22 @@ func (s *Service) ProjectAssets(userID string, projectID string) ([]ProjectAsset
 			return nil, summaryErr
 		}
 		result = append(result, summary)
+	}
+	return result, nil
+}
+
+func (s *Service) AssetProjectRelations(userID string, assetID string) ([]AssetProjectRelation, error) {
+	assetID = strings.TrimSpace(assetID)
+	if _, err := s.repo.AssetForUser(userID, assetID); err != nil {
+		return nil, err
+	}
+	projects, err := s.repo.ProjectsForAsset(userID, assetID)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]AssetProjectRelation, 0, len(projects))
+	for _, project := range projects {
+		result = append(result, AssetProjectRelation{ProjectID: project.ID, ProjectName: project.Name, Status: project.Status})
 	}
 	return result, nil
 }

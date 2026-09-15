@@ -356,6 +356,21 @@ paths:
       responses:
         "200":
           $ref: "#/components/responses/Envelope"
+  /assets/{id}/projects:
+    get:
+      tags: [assets, projects]
+      summary: 查询素材关联的项目
+      description: 以 project_asset_links 为事实来源，仅返回当前用户拥有的项目。
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          $ref: "#/components/responses/Envelope"
+        "404":
+          $ref: "#/components/responses/Error"
 components:
   parameters:
     AgentRunID:
