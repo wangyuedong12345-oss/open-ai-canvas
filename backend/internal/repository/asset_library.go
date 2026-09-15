@@ -58,21 +58,28 @@ func (r *Repository) AssetProjectRelationsByIDs(userID string, assetIDs []string
 	return rows, err
 }
 
-func (r *Repository) UserAssetFacets(userID string, status string) ([]UserAssetFacetRow, []UserAssetFacetRow, []UserAssetFacetRow, error) {
-	base := func() *gorm.DB {
-		return userAssetFilteredQuery(r.db.Model(&model.Asset{}).Where("user_id = ?", userID), UserAssetPageFilter{Status: status}, false)
+func (r *Repository) UserAssetFacets(userID string, filter UserAssetPageFilter) ([]UserAssetFacetRow, []UserAssetFacetRow, []UserAssetFacetRow, error) {
+	base := func(facetFilter UserAssetPageFilter) *gorm.DB {
+		return userAssetFilteredQuery(r.db.Model(&model.Asset{}).Where("user_id = ?", userID), facetFilter, true)
 	}
 	var kindRows []UserAssetFacetRow
-	if err := base().Select("kind AS key, COUNT(*) AS count").Group("kind").Scan(&kindRows).Error; err != nil {
+	kindFilter := filter
+	kindFilter.Kind = ""
+	if err := base(kindFilter).Select("kind AS key, COUNT(*) AS count").Group("kind").Scan(&kindRows).Error; err != nil {
 		return nil, nil, nil, err
 	}
 	var categoryRows []UserAssetFacetRow
+	categoryFilter := filter
+	categoryFilter.Category = ""
 	categoryKey := "CASE WHEN category IN ('material', 'other') THEN 'material' ELSE category END"
-	if err := base().Select(categoryKey + " AS key, COUNT(*) AS count").Group(categoryKey).Scan(&categoryRows).Error; err != nil {
+	if err := base(categoryFilter).Select(categoryKey + " AS key, COUNT(*) AS count").Group(categoryKey).Scan(&categoryRows).Error; err != nil {
 		return nil, nil, nil, err
 	}
 	var folderRows []UserAssetFacetRow
-	if err := base().Select("folder_id AS key, COUNT(*) AS count").Group("folder_id").Scan(&folderRows).Error; err != nil {
+	folderFilter := filter
+	folderFilter.FolderID = nil
+	folderFilter.Uncategorized = false
+	if err := base(folderFilter).Select("folder_id AS key, COUNT(*) AS count").Group("folder_id").Scan(&folderRows).Error; err != nil {
 		return nil, nil, nil, err
 	}
 	return kindRows, categoryRows, folderRows, nil

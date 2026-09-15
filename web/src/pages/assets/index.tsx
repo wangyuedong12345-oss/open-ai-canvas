@@ -56,7 +56,7 @@ const kindOptions = [
     { label: "3D 模型", value: "model" },
 ];
 
-const categoryOptions = [{ label: "全部分类", value: "all" }, ...ASSET_CATEGORY_OPTIONS];
+const categoryOptions = [{ label: "全部用途", value: "all" }, ...ASSET_CATEGORY_OPTIONS];
 const ASSET_LIBRARY_QUERY_KEY = ["asset-library"] as const;
 const ASSET_FOLDER_QUERY_KEY = ["asset-folders"] as const;
 const ASSET_GRID_DENSITY_KEY = "infinite-canvas:asset-grid-density";
@@ -175,6 +175,7 @@ export default function AssetsPage() {
     const kindCounts = useMemo(() => assetCountMap(kindOptions, assetPageQuery.data?.kindCounts, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.kind), [activeAssets, assetPageQuery.data?.kindCounts, trashAssets, viewMode]);
     const categoryCounts = useMemo(() => assetCountMap(categoryOptions, assetPageQuery.data?.categoryCounts, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.category || "other"), [activeAssets, assetPageQuery.data?.categoryCounts, trashAssets, viewMode]);
     const folderCounts = assetPageQuery.data?.folderCounts || {};
+    const folderCountTotal = assetPageQuery.data ? Object.values(folderCounts).reduce((sum, count) => sum + count, 0) : activeAssets.length;
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(totalAssets / pageSize));
@@ -191,7 +192,7 @@ export default function AssetsPage() {
     }, [validAssets]);
 
     const folderSelectOptions = useMemo(() => [
-        { label: "未分类", value: "" },
+        { label: "未整理", value: "" },
         ...folders.map((folder) => ({ label: folder.name, value: folder.id })),
     ], [folders]);
 
@@ -212,9 +213,9 @@ export default function AssetsPage() {
             setFolderEditor(null);
             setFolderName("");
             await invalidateAssetLibrary();
-            message.success(folderEditor === "new" ? "素材分类已创建" : "素材分类已重命名");
+            message.success(folderEditor === "new" ? "文件夹已创建" : "文件夹已重命名");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "素材分类保存失败");
+            message.error(error instanceof Error ? error.message : "文件夹保存失败");
         } finally {
             setFolderSaving(false);
         }
@@ -230,9 +231,9 @@ export default function AssetsPage() {
             if (folderFilter === folder.id) setFolderFilter("all");
             setPage(1);
             await invalidateAssetLibrary();
-            message.success(`已删除分类「${folder.name}」，其中素材已移至未分类`);
+            message.success(`已删除文件夹「${folder.name}」，其中素材已移至未整理`);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "素材分类删除失败");
+            message.error(error instanceof Error ? error.message : "文件夹删除失败");
         }
     };
 
@@ -587,7 +588,7 @@ export default function AssetsPage() {
                     />
                     <ListToolbar
                         className="library-toolbar"
-                        active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all")}
+                        active={Boolean(keyword || kindFilter !== "all" || categoryFilter !== "all" || folderFilter !== "all")}
                         onReset={() => {
                             setKeyword("");
                             setKindFilter("all");
@@ -595,27 +596,32 @@ export default function AssetsPage() {
                             setFolderFilter("all");
                             setPage(1);
                         }}
-                    >
-                        <Input
-                            allowClear
-                            className="w-full sm:w-80"
-                            prefix={<Search className="size-4 text-foreground/40" />}
-                            value={keyword}
-                            placeholder="搜索标题、内容、标签或来源"
-                            onChange={(event) => {
-                                setPage(1);
-                                setKeyword(event.target.value);
-                            }}
-                            />
-                            <Select
-                                value={folderFilter}
-                                className="w-full sm:w-44"
-                                options={[{ label: "全部自定义分类", value: "all" }, { label: "未分类", value: "uncategorized" }, ...folders.map((folder) => ({ label: folder.name, value: folder.id }))]}
-                                onChange={(value) => {
-                                    setFolderFilter(value as AssetFolderFilter);
-                                    setPage(1);
-                                }}
-                            />
+                        filtersAlwaysVisible
+                        filters={
+                            <>
+                                <Select
+                                    value={kindFilter}
+                                    className="w-full sm:w-36"
+                                    options={kindOptions.map((option) => ({ ...option, label: `${option.value === "all" ? "全部类型" : option.label} · ${kindCounts.get(option.value) || 0}` }))}
+                                    onChange={(value) => {
+                                        setViewMode("library");
+                                        setKindFilter(value as AssetKind | "all");
+                                        setPage(1);
+                                    }}
+                                />
+                                <Select
+                                    value={categoryFilter}
+                                    className="w-full sm:w-36"
+                                    options={categoryOptions.map((option) => ({ ...option, label: `${option.label} · ${categoryCounts.get(option.value) || 0}` }))}
+                                    onChange={(value) => {
+                                        setViewMode("library");
+                                        setCategoryFilter(value as AssetCategory | "all");
+                                        setPage(1);
+                                    }}
+                                />
+                            </>
+                        }
+                        trailing={
                             <Select
                                 value={gridDensity}
                                 className="w-full sm:w-32"
@@ -623,51 +629,53 @@ export default function AssetsPage() {
                                 options={[{ label: "舒适 · 6 列", value: 6 }, { label: "标准 · 8 列", value: 8 }, { label: "紧凑 · 10 列", value: 10 }]}
                                 onChange={(value) => setGridDensity(value as AssetGridDensity)}
                             />
+                        }
+                        activeFilters={
+                            kindFilter !== "all" || categoryFilter !== "all" || folderFilter !== "all" ? (
+                                <>
+                                    {kindFilter !== "all" ? <Tag closable onClose={() => { setKindFilter("all"); setPage(1); }}>类型：{kindOptions.find((option) => option.value === kindFilter)?.label}</Tag> : null}
+                                    {categoryFilter !== "all" ? <Tag closable onClose={() => { setCategoryFilter("all"); setPage(1); }}>用途：{assetCategoryLabel(categoryFilter)}</Tag> : null}
+                                    {folderFilter !== "all" ? <Tag closable onClose={() => { setFolderFilter("all"); setPage(1); }}>文件夹：{folderFilter === "uncategorized" ? "未整理" : folders.find((folder) => folder.id === folderFilter)?.name || "未知"}</Tag> : null}
+                                </>
+                            ) : null
+                        }
+                    >
+                        <Input
+                            allowClear
+                            className="w-full sm:w-80"
+                            prefix={<Search className="size-4 text-foreground/40" />}
+                            value={keyword}
+                            placeholder="搜索标题、内容或标签"
+                            onChange={(event) => {
+                                setPage(1);
+                                setKeyword(event.target.value);
+                            }}
+                            />
                         </ListToolbar>
                 </div>
 
                 <div className="canvas-library-frame assets-library-frame">
                     <div className="grid min-h-0 gap-4 lg:grid-cols-[176px_minmax(0,1fr)]">
                         <aside className="thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-y-auto lg:pr-3">
-                            <AssetFilterGroup
-                                title="素材类型"
-                                options={kindOptions}
-                                value={viewMode === "library" ? kindFilter : ""}
-                                counts={kindCounts}
-                                onChange={(value) => {
-                                    setViewMode("library");
-                                    setKindFilter(value as AssetKind | "all");
-                                    setPage(1);
-                                }}
-                            />
-                            <AssetFilterGroup
-                                title="素材用途"
-                                options={categoryOptions}
-                                value={viewMode === "library" ? categoryFilter : ""}
-                                counts={categoryCounts}
-                                onChange={(value) => {
-                                    setViewMode("library");
-                                    setCategoryFilter(value as AssetCategory | "all");
-                                    setPage(1);
-                                }}
-                                className="lg:mt-5"
-                            />
-                            <div className="mt-5">
+                            <div>
                                 <div className="mb-1.5 flex items-center justify-between px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">
                                     <span>文件夹</span>
-                                    <button type="button" className="assets-folder-add" title="新建分类" aria-label="新建分类" onClick={() => { setFolderName(""); setFolderEditor("new"); }}><FolderPlus className="size-3.5" /></button>
+                                    <button type="button" className="assets-folder-add" title="新建文件夹" aria-label="新建文件夹" onClick={() => { setFolderName(""); setFolderEditor("new"); }}><FolderPlus className="size-3.5" /></button>
                                 </div>
                                 <div className="space-y-0.5">
-                                    <button type="button" aria-pressed={folderFilter === "uncategorized"} className={`assets-filter-item w-full ${folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => { setFolderFilter("uncategorized"); setPage(1); }}>
-                                        <span className="assets-filter-item-label">未分类</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
+                                    <button type="button" aria-pressed={folderFilter === "all"} className={`assets-filter-item w-full ${folderFilter === "all" ? "is-active" : ""}`} onClick={() => { setFolderFilter("all"); setPage(1); }}>
+                                        <span className="assets-filter-item-label">全部素材</span><span className="assets-filter-count">{folderCountTotal}</span>
+                                    </button>
+                                    <button type="button" aria-pressed={folderFilter === "uncategorized"} className={`assets-filter-item w-full ${folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => { setFolderFilter(folderFilter === "uncategorized" ? "all" : "uncategorized"); setPage(1); }}>
+                                        <span className="assets-filter-item-label">未整理</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
                                     </button>
                                     {folders.map((folder) => (
                                         <div key={folder.id} className="assets-folder-row">
-                                            <button type="button" aria-pressed={folderFilter === folder.id} className={`assets-filter-item min-w-0 flex-1 ${folderFilter === folder.id ? "is-active" : ""}`} onClick={() => { setFolderFilter(folder.id); setPage(1); }}>
+                                            <button type="button" aria-pressed={folderFilter === folder.id} className={`assets-filter-item min-w-0 flex-1 ${folderFilter === folder.id ? "is-active" : ""}`} onClick={() => { setFolderFilter(folderFilter === folder.id ? "all" : folder.id); setPage(1); }}>
                                                 <span className="assets-filter-item-label min-w-0 truncate">{folder.name}</span><span className="assets-filter-count">{folderCounts[folder.id] ?? activeAssets.filter((asset) => asset.folderId === folder.id).length}</span>
                                             </button>
-                                            <Dropdown trigger={["click"]} menu={{ items: [{ key: "rename", icon: <PencilLine className="size-3.5" />, label: "重命名", onClick: () => { setFolderName(folder.name); setFolderEditor(folder); } }, { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除分类", onClick: () => void removeFolder(folder) }] }}>
-                                                <button type="button" className="assets-folder-more" aria-label={`管理分类 ${folder.name}`} title="管理分类"><MoreHorizontal className="size-3.5" /></button>
+                                            <Dropdown trigger={["click"]} menu={{ items: [{ key: "rename", icon: <PencilLine className="size-3.5" />, label: "重命名", onClick: () => { setFolderName(folder.name); setFolderEditor(folder); } }, { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "删除文件夹", onClick: () => void removeFolder(folder) }] }}>
+                                                <button type="button" className="assets-folder-more" aria-label={`管理文件夹 ${folder.name}`} title="管理文件夹"><MoreHorizontal className="size-3.5" /></button>
                                             </Dropdown>
                                         </div>
                                     ))}
@@ -733,7 +741,7 @@ export default function AssetsPage() {
                             ) : (
                                 <>
                                     {filteredAssets.length === 0 ? (
-                                        <WorkspaceState icon="assets" compact title="没有匹配的素材" description="调整关键词或左侧分类后再试。" />
+                                        <WorkspaceState icon="assets" compact title="没有匹配的素材" description="调整关键词、类型、用途或文件夹后再试。" />
                                     ) : (
                                         <CollectionGrid className="library-grid assets-library-grid" style={{ "--assets-grid-columns": gridDensity } as React.CSSProperties}>
                                             {canCreateAsset ? (
@@ -934,7 +942,7 @@ export default function AssetsPage() {
 
             <Modal
                 className="library-modal library-confirm-modal"
-                title={folderEditor === "new" ? "新建分类" : "重命名分类"}
+                title={folderEditor === "new" ? "新建文件夹" : "重命名文件夹"}
                 open={Boolean(folderEditor)}
                 confirmLoading={folderSaving}
                 onCancel={() => { if (!folderSaving) setFolderEditor(null); }}
@@ -1075,7 +1083,7 @@ function AssetCard({
               ...(asset.kind === "text" || asset.kind === "image" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: "编辑", onClick: onEdit }] : []),
               ...(asset.kind === "text" ? [{ key: "copy", icon: <Copy className="size-3.5" />, label: "复制文本", onClick: () => void onCopy(asset) }] : []),
               ...(asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" || asset.kind === "model" ? [{ key: "download", icon: <Download className="size-3.5" />, label: "下载", onClick: () => onDownload(asset) }] : []),
-              { key: "move", icon: <FolderOpen className="size-3.5" />, label: "移动到分类", children: folderOptions.map((folder) => ({ key: folder.value || "uncategorized", label: folder.label, onClick: () => onMoveToFolder(folder.value) })) },
+              { key: "move", icon: <FolderOpen className="size-3.5" />, label: "移动到文件夹", children: folderOptions.map((folder) => ({ key: folder.value || "uncategorized", label: folder.label, onClick: () => onMoveToFolder(folder.value) })) },
               { type: "divider" as const },
               { key: "archive", icon: <Trash2 className="size-3.5 text-amber-500" />, label: "移入回收站", onClick: onArchive },
               { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "彻底删除", onClick: onDelete },
@@ -1297,39 +1305,6 @@ function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; 
                     <strong>去画布保存</strong>
                     <span>把画布上满意的镜头与画面留档进素材库。</span>
                 </button>
-            </div>
-        </div>
-    );
-}
-
-function AssetFilterGroup({
-    title,
-    options,
-    value,
-    counts,
-    onChange,
-    className = "",
-}: {
-    title: string;
-    options: Array<{ label: string; value: string }>;
-    value: string;
-    counts: Map<string, number>;
-    onChange: (value: string) => void;
-    className?: string;
-}) {
-    return (
-        <div className={className}>
-            <div className="mb-1.5 px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">{title}</div>
-            <div className="flex gap-1.5 lg:block lg:space-y-0.5">
-                {options.map((option) => {
-                    const active = value === option.value;
-                    return (
-                        <button key={option.value} type="button" aria-pressed={active} className={`assets-filter-item ${active ? "is-active" : ""}`} onClick={() => onChange(option.value)}>
-                            <span className="assets-filter-item-label">{option.label}</span>
-                            <span className="assets-filter-count">{counts.get(option.value) || 0}</span>
-                        </button>
-                    );
-                })}
             </div>
         </div>
     );

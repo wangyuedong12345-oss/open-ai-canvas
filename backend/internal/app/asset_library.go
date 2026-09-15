@@ -76,7 +76,7 @@ func (s *Service) UserAssetsPage(userID string, page int, pageSize int, filter U
 	for _, row := range relationRows {
 		projectRelations[row.AssetID] = append(projectRelations[row.AssetID], AssetProjectRelation{ProjectID: row.ProjectID, ProjectName: row.ProjectName, Status: row.Status})
 	}
-	kindRows, categoryRows, folderRows, err := s.repo.UserAssetFacets(userID, filter.Status)
+	kindRows, categoryRows, folderRows, err := s.repo.UserAssetFacets(userID, repoFilter)
 	if err != nil {
 		return UserAssetPage{}, err
 	}
