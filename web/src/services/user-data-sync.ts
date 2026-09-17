@@ -15,6 +15,7 @@ import { repairMissingCanvasAssets } from "@/services/canvas-asset-repair";
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
 import { sameAgentCanvasContent } from "@/lib/canvas/agent-canvas-snapshot";
 import { applyAgentCanvasPatch, type AgentCanvasPatch } from "@/lib/canvas/agent-canvas-patch";
+import { ApiError } from "@/services/api/request";
 
 let activeRemoteUserId = "";
 type RemoteUserDataPhase = "inactive" | "hydrating" | "ready" | "failed";
@@ -52,7 +53,21 @@ export async function loadCanvasProjectForEditing(id: string) {
         if (epoch !== sessionEpoch) throw new Error("账号已切换，请重新打开画布");
         const local = useCanvasStore.getState().projects.find((project) => project.id === id);
         if (!activeRemoteUserId || verifiedProjects.has(id)) return local;
-        const { project } = await getRemoteCanvasProject(id);
+        let project: CanvasProject;
+        try {
+            ({ project } = await getRemoteCanvasProject(id));
+        } catch (error) {
+            // 本地新建画布可能已经落盘，但素材冲突会让首次全量同步提前失败。
+            // 这类画布仍可继续编辑，后续增量同步会把它作为新记录补到云端。
+            if (local && isRemoteRecordNotFound(error)) {
+                acknowledgedProjects.delete(id);
+                verifiedProjects.add(id);
+                scheduleRemoteUserDataSync();
+                return local;
+            }
+            if (isRemoteRecordNotFound(error)) throw new Error("画布不存在或已被删除");
+            throw error;
+        }
         await loadReferencedAssets(collectAssetIds(project));
         const current = useCanvasStore.getState().projects.find((candidate) => candidate.id === id);
         if (current && !sameEntitySnapshot(acknowledgedProjects.get(id), current)) {
@@ -295,12 +310,29 @@ export async function createCanvasProjectWithRemoteSync(title: string, projectId
     if (initialContent) useCanvasStore.getState().updateProject(id, initialContent);
     if (!activeRemoteUserId) return { id, syncError: new Error("尚未建立云端同步会话") };
     try {
-        await saveRemoteUserDataNow();
+        // 新画布必须先独立写入。全量增量同步会先校验既有素材，某张素材冲突
+        // 不应阻断一个没有关系的新画布创建，否则跳转后只能拿到不存在的远端 ID。
+        await saveCreatedCanvasProjectNow(id);
+        scheduleRemoteUserDataSync();
         return { id };
     } catch (syncError) {
         scheduleRemoteUserDataSync();
         return { id, syncError };
     }
+}
+
+async function saveCreatedCanvasProjectNow(id: string) {
+    const epoch = sessionEpoch;
+    await withRemoteUserDataSyncExclusive(async () => {
+        if (epoch !== sessionEpoch) throw new Error("账号已切换，已停止旧会话保存");
+        requireRemoteUserDataBaseline();
+        const project = useCanvasStore.getState().projects.find((candidate) => candidate.id === id);
+        if (!project) throw new Error("本地画布不存在，无法同步");
+        const remotePayload = await ensureRemoteResourceReferences(project);
+        await upsertRemoteCanvasProject(sanitizeCanvasProjectForRemoteSync(remotePayload));
+        acknowledgedProjects.set(id, project);
+        verifiedProjects.add(id);
+    });
 }
 
 export async function deleteAssetWithRemoteSync(id: string) {
@@ -317,6 +349,11 @@ export async function deleteAssetWithRemoteSync(id: string) {
         await useAssetStore.getState().removeAsset(assetId);
         await flushAssetStorePersistence();
     });
+    await Promise.all([
+        appQueryClient.invalidateQueries({ queryKey: ["asset-library"] }),
+        appQueryClient.invalidateQueries({ queryKey: ["asset-picker"] }),
+        appQueryClient.invalidateQueries({ queryKey: ["asset-picker-count"] }),
+    ]);
 }
 
 export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
@@ -659,6 +696,10 @@ async function uploadLocalStorageKey(storageKey: string, payload: Record<string,
 
 function requireRemoteUserDataBaseline() {
     if (remoteUserDataPhase !== "ready") throw new Error("云端数据基线尚未建立，已停止写入");
+}
+
+function isRemoteRecordNotFound(error: unknown) {
+    return error instanceof ApiError && error.status === 404;
 }
 
 function sameEntitySnapshot<T>(acknowledged: T | undefined, current: T) {

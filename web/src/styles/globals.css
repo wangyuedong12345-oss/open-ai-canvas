@@ -13860,7 +13860,7 @@ html:not(.dark) .creation-history-drawer-root {
 .asset-library-picker-modal .ant-modal-body { padding: 0 !important; }
 .asset-library-picker-modal .ant-modal-close { top: 12px; right: 12px; }
 .asset-picker-shell { display: flex; height: min(640px, calc(100vh - var(--space-12))); min-height: 460px; flex-direction: column; color: var(--foreground); overscroll-behavior: contain; }
-.asset-picker-toolbar { display: grid; min-height: 64px; flex-shrink: 0; grid-template-columns: minmax(132px, 1fr) minmax(240px, 360px) minmax(132px, 1fr); align-items: center; gap: 16px; padding: 10px 52px 10px 18px; }
+.asset-picker-toolbar { display: grid; min-height: 64px; flex-shrink: 0; grid-template-columns: 176px minmax(240px, 1fr) auto; align-items: center; gap: 16px; padding: 10px 52px 10px 18px; }
 .asset-picker-heading { display: flex; min-width: 0; align-items: center; gap: 10px; overflow: hidden; }
 .asset-picker-heading-copy { display: flex; min-width: 0; flex-shrink: 0; align-items: center; gap: 10px; }
 .asset-picker-heading-copy > span { color: var(--foreground); font-size: var(--fs-label); font-weight: 650; line-height: 1.2; }
@@ -13875,14 +13875,14 @@ html:not(.dark) .creation-history-drawer-root {
 .asset-picker-source-dropdown .ant-dropdown-menu-item-icon { width: 15px; height: 15px; margin-inline-end: 6px !important; }
 .asset-picker-source-menu-label { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
 .asset-picker-source-menu-label em { color: color-mix(in srgb, currentColor 58%, transparent); font-size: var(--fs-micro); font-style: normal; }
-.asset-picker-search { display: flex; height: 38px; min-width: 0; align-items: center; gap: 9px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 0 12px; transition: background-color var(--motion-state) ease, box-shadow var(--motion-state) ease; }
+.asset-picker-search-group { display: flex; min-width: 0; align-items: center; gap: 8px; }
+.asset-picker-search { display: flex; min-width: 0; flex: 1; height: 38px; align-items: center; gap: 9px; border-radius: var(--r-sm); background: color-mix(in srgb, var(--foreground) 6%, transparent); padding: 0 12px; transition: background-color var(--motion-state) ease, box-shadow var(--motion-state) ease; }
 .asset-picker-search:focus-within { background: color-mix(in srgb, var(--foreground) 8%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 54%, transparent); }
 .asset-picker-search svg { width: 16px; height: 16px; flex-shrink: 0; color: color-mix(in srgb, var(--foreground) 42%, transparent); }
 .asset-picker-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: var(--fs-label); }
 .asset-picker-count { justify-self: end; color: color-mix(in srgb, var(--foreground) 42%, transparent); font-size: var(--fs-micro); }
 .asset-picker-body { display: grid; min-height: 0; flex: 1; grid-template-columns: 176px minmax(0, 1fr); gap: var(--space-4); padding: 0 18px; }
-.asset-picker-categories { overflow-y: auto; padding: 10px 0; }
-.asset-picker-nav-label { display: block; padding: 10px 10px 4px; color: color-mix(in srgb, var(--foreground) 38%, transparent); font-size: var(--fs-micro); font-weight: 650; letter-spacing: .04em; }
+.asset-picker-categories { overflow-y: auto; padding: 8px 0; }
 .asset-picker-categories .assets-filter-item { width: 100%; height: 32px; }
 .asset-picker-categories .assets-filter-item:hover { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
 .asset-picker-categories .assets-filter-item.is-active { background: var(--control-selected-bg); color: var(--control-selected-fg); font-weight: 560; }
@@ -13943,11 +13943,11 @@ html:not(.dark) .creation-history-drawer-root {
     .asset-picker-heading { gap: 6px; }
     .asset-picker-heading-copy { gap: 6px; }
     .asset-picker-title-trigger { padding-inline: 4px; }
-    .asset-picker-search { grid-column: 1 / -1; grid-row: 2; max-width: none; }
+    .asset-picker-search-group { grid-column: 1 / -1; grid-row: 2; }
+    .asset-picker-search { max-width: none; }
     .asset-picker-count { grid-column: 2; grid-row: 1; }
     .asset-picker-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
     .asset-picker-categories { display: flex; gap: 6px; overflow-x: auto; padding: 8px; }
-    .asset-picker-nav-label { display: none; }
     .asset-picker-categories button { width: auto; min-width: 96px; }
     .asset-picker-grid-wrap { padding: 10px 4px; }
     .asset-picker-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
@@ -14001,6 +14001,10 @@ html:not(.dark) .creation-history-drawer-root {
 .library-modal .ant-form-item-label > label { color: color-mix(in srgb, var(--foreground) 68%, transparent); font-size: var(--fs-caption); font-weight: 560; }
 .library-modal :where(.ant-input, .ant-input-affix-wrapper, .ant-select-selector, .ant-input-number, .ant-picker) { min-height: 42px; border-color: color-mix(in srgb, var(--foreground) 15%, transparent) !important; border-radius: var(--r-md) !important; background: color-mix(in srgb, var(--foreground) 3%, transparent) !important; box-shadow: none !important; }
 .library-modal .ant-input-affix-wrapper .ant-input { min-height: 34px; background: transparent !important; }
+.library-modal .library-cover-url-row { display: flex; width: 100%; align-items: stretch; gap: 8px; }
+.library-modal .library-cover-url-row > .ant-space-compact-item { margin-inline-start: 0 !important; }
+.library-modal .library-cover-url-row > .ant-input { min-width: 0; flex: 1; border-radius: var(--r-md) !important; }
+.library-modal .library-cover-url-row > .ant-btn { height: 42px; flex-shrink: 0; border-radius: var(--r-md) !important; }
 .library-modal :where(.ant-input:hover, .ant-input-affix-wrapper:hover, .ant-select-selector:hover) { border-color: color-mix(in srgb, var(--foreground) 26%, transparent) !important; }
 /* 聚焦态：--workspace-accent 暗色下是 #f5f5f5，直接描边会形成刺眼白圈，降到半透明。 */
 .library-modal :where(.ant-input:focus, .ant-input-affix-wrapper-focused, .ant-select-focused .ant-select-selector) { border-color: var(--control-focus-ring) !important; box-shadow: none !important; }

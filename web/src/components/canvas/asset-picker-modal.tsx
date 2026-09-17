@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { AssetLibraryPickerModal, type AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
+import { AssetLibraryPickerModal, type AssetLibraryPickerItem, type AssetPickerMediaKind } from "@/components/assets/asset-library-picker-modal";
 import { useExternalAssetSources } from "@/hooks/use-external-asset-sources";
 import { ASSET_CATEGORY_LABELS, normalizeAssetCategory } from "@/lib/asset-category";
 import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
@@ -32,13 +32,15 @@ export type InsertAssetPayload =
 type Props = {
     open: boolean;
     multiple?: boolean;
+    mediaKinds?: AssetPickerMediaKind[];
     onInsert: (payloads: InsertAssetPayload[]) => Promise<void> | void;
     onClose: () => void;
+    onOpenLibrary?: () => void;
 };
 
 const categoryLabels: Record<string, string> = { all: "全部素材", ...ASSET_CATEGORY_LABELS, archived: "回收站" };
 
-export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: Props) {
+export function AssetPickerModal({ open, multiple = true, mediaKinds = ["image", "video", "audio", "text"], onInsert, onClose, onOpenLibrary }: Props) {
     const assets = useAssetStore((state) => state.assets);
     const externalAssetSources = useExternalAssetSources(open);
     const insertableAssets = useMemo(() => assets.filter((asset): asset is InsertableAsset => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "audio"), [assets]);
@@ -63,17 +65,21 @@ export function AssetPickerModal({ open, multiple = true, onInsert, onClose }: P
         <AssetLibraryPickerModal
             remoteLibrary
             open={open}
-            mediaKinds={["image", "video", "audio", "text"]}
+            mediaKinds={mediaKinds}
+            showRecycleBin={false}
             items={items}
             categoryLabels={{ ...categoryLabels, ...externalAssetSources.categoryLabels }}
             folders={externalAssetSources.folders}
             footerNote={externalAssetSources.error || undefined}
             multiple={multiple}
+            eyebrow="插入素材"
+            title="我的素材"
             confirmLabel={(count) => `插入已选素材${count ? `（${count}）` : ""}`}
             emptyDescription="先在素材库中添加图片、视频、音频或文本。"
             onClose={onClose}
-            onConfirm={async (ids) => {
-                await onInsert(assetPickerItemsToInsertPayloads(ids, items));
+            onOpenLibrary={onOpenLibrary}
+            onConfirm={async (ids, pickerItems) => {
+                await onInsert(assetPickerItemsToInsertPayloads(ids, pickerItems || items));
                 onClose();
             }}
         />

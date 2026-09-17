@@ -79,8 +79,8 @@ export default function AssetsPage() {
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
+    const mediaInputRef = useRef<HTMLInputElement>(null);
     const assetInputRef = useRef<HTMLInputElement>(null);
-    const modelInputRef = useRef<HTMLInputElement>(null);
     const assets = useAssetStore((state) => state.assets);
     const addAsset = useAssetStore((state) => state.addAsset);
 
@@ -111,6 +111,7 @@ export default function AssetsPage() {
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const [mediaFile, setMediaFile] = useState<File | null>(null);
     const [imageUploading, setImageUploading] = useState(false);
     const [imageUploadProgress, setImageUploadProgress] = useState<{ phase: "uploading" | "confirming"; percent?: number } | null>(null);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
@@ -273,6 +274,7 @@ export default function AssetsPage() {
         setEditingAsset(null);
         setImageDraft(null);
         setImageFile(null);
+        setMediaFile(null);
         setImageUploading(false);
         setImageUploadProgress(null);
         setFormKind("text");
@@ -283,6 +285,7 @@ export default function AssetsPage() {
     const openEdit = (asset: LibraryAsset) => {
         setEditingAsset(asset);
         setImageFile(null);
+        setMediaFile(null);
         setImageUploading(false);
         setImageUploadProgress(null);
         setFormKind(asset.kind);
@@ -305,6 +308,7 @@ export default function AssetsPage() {
     const saveAsset = async () => {
         const values = await form.validateFields();
         let imageData = imageDraft;
+        let uploadedMedia: Awaited<ReturnType<typeof uploadMediaFile>> | undefined;
         if (values.kind === "image" && imageFile) {
             setImageUploading(true);
             setImageUploadProgress({ phase: "uploading", percent: 0 });
@@ -317,6 +321,22 @@ export default function AssetsPage() {
                 void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
             } catch (error) {
                 message.error(error instanceof Error ? error.message : "图片上传失败，请重试");
+                return;
+            } finally {
+                setImageUploading(false);
+                setImageUploadProgress(null);
+            }
+        }
+        if ((values.kind === "video" || values.kind === "audio" || values.kind === "model") && mediaFile) {
+            setImageUploading(true);
+            setImageUploadProgress({ phase: "uploading", percent: 0 });
+            try {
+                uploadedMedia = await uploadMediaFile(mediaFile, values.kind, (uploadedBytes, totalBytes) => {
+                    setImageUploadProgress({ phase: "uploading", percent: totalBytes ? Math.round((uploadedBytes / totalBytes) * 100) : 0 });
+                });
+                void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : `${assetKindLabel(values.kind)}上传失败，请重试`);
                 return;
             } finally {
                 setImageUploading(false);
@@ -342,12 +362,39 @@ export default function AssetsPage() {
         if (values.kind === "text") {
             const asset = { ...base, kind: "text" as const, data: { content: (values.content || "").trim() } };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
-        } else {
+        } else if (values.kind === "image") {
             if (!imageData) {
                 message.error("请选择图片文件");
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageData };
+            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+        } else if (values.kind === "video") {
+            const existingData = editingAsset?.kind === "video" ? editingAsset.data : undefined;
+            const data = uploadedMedia ? { url: uploadedMedia.url, storageKey: uploadedMedia.storageKey, width: uploadedMedia.width || 0, height: uploadedMedia.height || 0, durationMs: uploadedMedia.durationMs, hasAudio: uploadedMedia.hasAudio, bytes: uploadedMedia.bytes, mimeType: uploadedMedia.mimeType } : existingData;
+            if (!data) {
+                message.error("请选择视频文件");
+                return;
+            }
+            const asset = { ...base, kind: "video" as const, data };
+            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+        } else if (values.kind === "audio") {
+            const existingData = editingAsset?.kind === "audio" ? editingAsset.data : undefined;
+            const data = uploadedMedia ? { url: uploadedMedia.url, storageKey: uploadedMedia.storageKey, durationMs: uploadedMedia.durationMs, bytes: uploadedMedia.bytes, mimeType: uploadedMedia.mimeType } : existingData;
+            if (!data) {
+                message.error("请选择音频文件");
+                return;
+            }
+            const asset = { ...base, kind: "audio" as const, data };
+            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+        } else if (values.kind === "model") {
+            const existingData = editingAsset?.kind === "model" ? editingAsset.data : undefined;
+            const data = uploadedMedia ? { url: uploadedMedia.url, storageKey: uploadedMedia.storageKey, bytes: uploadedMedia.bytes, mimeType: uploadedMedia.mimeType, fileName: mediaFile?.name || uploadedMedia.storageKey } : existingData;
+            if (!data) {
+                message.error("请选择 3D 模型文件");
+                return;
+            }
+            const asset = { ...base, kind: "model" as const, data };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         }
 
@@ -383,22 +430,15 @@ export default function AssetsPage() {
         }
     };
 
-    const readModelFile = async (file?: File) => {
-        if (!file || !/\.(glb|gltf)$/i.test(file.name)) return;
-        const uploaded = await uploadMediaFile(file, "model");
-        void queryClient.invalidateQueries({ queryKey: assetStorageUsageQueryKey });
-        addAsset({
-            kind: "model",
-            title: file.name.replace(/\.(glb|gltf)$/i, ""),
-            coverUrl: "",
-            tags: ["3D模型"],
-            source: "手动上传",
-            data: { url: uploaded.url, storageKey: uploaded.storageKey, bytes: uploaded.bytes, mimeType: uploaded.mimeType, fileName: file.name },
-            metadata: { source: "manual" },
-        });
-        // 直传失败时文件只落在本机，云端同步会重传；此时不能说成"已保存"。
-        if (uploaded.pendingRemoteUpload) message.warning(`3D 模型已保存在本机，尚未上传到服务器${uploaded.remoteUploadError ? `：${uploaded.remoteUploadError}` : ""}`);
-        else message.success("3D 模型已保存");
+    const readMediaFile = (file?: File) => {
+        if (!file || imageUploading) return;
+        const valid = formKind === "video" ? file.type.startsWith("video/") : formKind === "audio" ? file.type.startsWith("audio/") : formKind === "model" ? /\.(glb|gltf)$/i.test(file.name) : false;
+        if (!valid) {
+            message.error(formKind === "video" ? "请选择视频文件" : formKind === "audio" ? "请选择音频文件" : "请选择 GLB 或 GLTF 模型文件");
+            return;
+        }
+        setMediaFile(file);
+        if (!form.getFieldValue("title")) form.setFieldValue("title", file.name.replace(/\.(glb|gltf|mp4|mov|webm|mp3|wav|m4a)$/i, ""));
     };
 
     const copyAssetText = async (asset: LibraryAsset) => {
@@ -595,7 +635,6 @@ export default function AssetsPage() {
                                                 menu={{
                                                     items: [
                                                         { key: "package", icon: <FileUp className="size-4" />, label: "导入素材包", onClick: () => assetInputRef.current?.click() },
-                                                        { key: "model", icon: <Upload className="size-4" />, label: "上传 3D 模型", onClick: () => modelInputRef.current?.click() },
                                                     ],
                                                 }}
                                             >
@@ -834,8 +873,16 @@ export default function AssetsPage() {
                                 options={[
                                     { label: "文本", value: "text" },
                                     { label: "图片", value: "image" },
+                                    { label: "视频", value: "video" },
+                                    { label: "音频", value: "audio" },
+                                    { label: "3D 模型", value: "model" },
                                 ]}
-                                onChange={(value) => setFormKind(value)}
+                                onChange={(value: AssetKind) => {
+                                    setFormKind(value);
+                                    setImageFile(null);
+                                    setMediaFile(null);
+                                    if (value !== "image") setImageDraft(null);
+                                }}
                             />
                         </Form.Item>
                         <Form.Item name="category" label="素材用途">
@@ -845,7 +892,7 @@ export default function AssetsPage() {
                             <Input placeholder="给素材起一个容易检索的名字" />
                         </Form.Item>
                         <Form.Item name="coverUrl" label="封面 URL">
-                            <Space.Compact className="w-full">
+                            <Space.Compact className="library-cover-url-row w-full">
                                 <Input placeholder="可粘贴图片 URL，也可以上传本地封面" />
                                 <Button icon={<Upload className="size-3.5" />} onClick={() => coverInputRef.current?.click()}>
                                     上传
@@ -870,7 +917,7 @@ export default function AssetsPage() {
                             <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
                                 <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
                             </Form.Item>
-                        ) : (
+                        ) : formKind === "image" ? (
                             <Form.Item label="图片内容" required>
                                 <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
                                     <Button disabled={imageUploading} icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>
@@ -888,6 +935,27 @@ export default function AssetsPage() {
                                     ) : (
                                         <Typography.Text type="secondary" className="ml-3 text-xs">
                                             未选择图片
+                                        </Typography.Text>
+                                    )}
+                                </div>
+                            </Form.Item>
+                        ) : (
+                            <Form.Item label={`${assetKindLabel(formKind)}文件`} required>
+                                <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
+                                    <Button disabled={imageUploading} icon={<Upload className="size-4" />} onClick={() => mediaInputRef.current?.click()}>
+                                        {imageUploading ? `正在上传${assetKindLabel(formKind)}` : `选择${assetKindLabel(formKind)}文件`}
+                                    </Button>
+                                    {mediaFile ? (
+                                        <Tag color="gold" className="ml-3">
+                                            {mediaFile.name}
+                                        </Tag>
+                                    ) : editingAsset?.kind === formKind ? (
+                                        <Typography.Text type="secondary" className="ml-3 text-xs">
+                                            已有素材文件，选择新文件可替换
+                                        </Typography.Text>
+                                    ) : (
+                                        <Typography.Text type="secondary" className="ml-3 text-xs">
+                                            未选择文件
                                         </Typography.Text>
                                     )}
                                 </div>
@@ -975,12 +1043,12 @@ export default function AssetsPage() {
 
             <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
             <input
-                ref={modelInputRef}
+                ref={mediaInputRef}
                 type="file"
-                accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+                accept={assetUploadAccept(formKind)}
                 className="hidden"
                 onChange={(event) => {
-                    void readModelFile(event.target.files?.[0]);
+                    readMediaFile(event.target.files?.[0]);
                     event.currentTarget.value = "";
                 }}
             />
@@ -1501,6 +1569,10 @@ function assetProjectRelationLabel(relations: AssetProjectRelation[] | undefined
 
 function assetKindLabel(kind: AssetKind) {
     return kind === "image" ? "图片" : kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "model" ? "3D 模型" : "文本";
+}
+
+function assetUploadAccept(kind: AssetKind) {
+    return kind === "image" ? "image/*" : kind === "video" ? "video/*" : kind === "audio" ? "audio/*" : kind === "model" ? ".glb,.gltf,model/gltf-binary,model/gltf+json" : undefined;
 }
 
 function assetDownloadLabel(asset: LibraryAsset) {

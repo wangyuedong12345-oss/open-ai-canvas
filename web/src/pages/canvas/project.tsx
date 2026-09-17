@@ -2,7 +2,7 @@ import { isCanvasNodeGenerating } from "@/lib/canvas/canvas-node-task-state";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { loadAssetsForUse } from "@/services/user-data-sync";
 import { canvasAssetHandoffIds } from "@/lib/canvas/canvas-asset-handoff";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -242,6 +242,7 @@ function InfiniteCanvasPage() {
     // 命令式确认必须走 App.useApp().modal；静态 Modal.confirm 拿不到主题和 App 上下文。
     const { message, modal } = App.useApp();
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
     const params = useParams<{ id: string }>();
     const [searchParams, setSearchParams] = useSearchParams();
     const projectId = params.id || "";
@@ -3057,12 +3058,23 @@ function InfiniteCanvasPage() {
                             onConfirmClear={clearCanvas}
                         />
 
-                        <AssetPickerModal open={assetPickerOpen} multiple={assetInsertScope === "canvas"} onInsert={handleLibraryAssetsInsert} onClose={closeAssetPicker} />
+                        <AssetPickerModal
+                            open={assetPickerOpen}
+                            multiple={assetInsertScope === "canvas"}
+                            mediaKinds={assetInsertScope === "timeline" ? ["video", "audio"] : ["image", "video", "audio", "text"]}
+                            onInsert={handleLibraryAssetsInsert}
+                            onClose={closeAssetPicker}
+                            onOpenLibrary={() => {
+                                closeAssetPicker();
+                                navigate("/assets");
+                            }}
+                        />
                         <CanvasProjectAssetModal
                             open={projectAssetOpen}
                             detail={linkedProjectQuery.data}
                             initialCategory={projectAssetInitialCategory}
                             initialFolderId={projectAssetInitialFolderId}
+                            mediaKinds={projectAssetScope === "timeline" ? ["video", "audio"] : ["image", "video", "audio", "text"]}
                             onClose={closeProjectAssets}
                             onInsert={handleTimelineProjectAssetsInsert}
                             onInsertFolder={projectAssetScope === "canvas" ? handleProjectFolderInsert : undefined}

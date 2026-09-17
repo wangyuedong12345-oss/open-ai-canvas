@@ -18,6 +18,7 @@ export function CanvasProjectAssetModal({
     detail,
     initialCategory = "all",
     initialFolderId = "all",
+    mediaKinds = ["image", "video", "audio", "text"],
     onClose,
     onInsert,
     onInsertFolder,
@@ -26,6 +27,7 @@ export function CanvasProjectAssetModal({
     detail?: ProjectDetail;
     initialCategory?: string;
     initialFolderId?: string;
+    mediaKinds?: AssetPickerMediaKind[];
     onClose: () => void;
     onInsert: (payloads: InsertAssetPayload[]) => Promise<void> | void;
     onInsertFolder?: (folderId: string) => Promise<void> | void;
@@ -80,13 +82,15 @@ export function CanvasProjectAssetModal({
         <AssetLibraryPickerModal
             remoteLibrary={!detail}
             open={open}
-            mediaKinds={["image", "video", "audio", "text"]}
+            mediaKinds={mediaKinds}
+            showRecycleBin={false}
             items={pickerItems}
             categoryLabels={{ ...categoryLabels, ...externalAssetSources.categoryLabels }}
             initialCategory={initialCategory}
             initialFolderId={initialFolderId}
             folders={externalAssetSources.folders}
             folderActionSource="local"
+            eyebrow="引入资产"
             title="项目资产"
             confirmLabel={(count) => `引入已选资产${count ? `（${count}）` : ""}`}
             emptyTitle="此分类没有可引用资产"
@@ -101,16 +105,20 @@ export function CanvasProjectAssetModal({
                     : undefined
             }
             onClose={onClose}
-            onConfirm={async (ids) => {
+            onConfirm={async (ids, resolvedPickerItems) => {
                 const payloads = await Promise.all(
                     ids.map(async (id) => {
-                        const external = externalAssetSources.items.find((item) => item.id === id)?.external;
+                        const pickerItem = resolvedPickerItems?.find((item) => item.id === id);
+                        const external = pickerItem?.external || externalAssetSources.items.find((item) => item.id === id)?.external;
                         if (external) return externalAssetToInsertPayload(external);
                         const item = items.find((candidate) => candidate.id === id);
-                        if (!item) throw new Error("所选资产已不存在，请重新选择");
-                        if (item.media || item.character || !item.project) return toInsertPayload(item);
-                        const { asset } = await getRemoteAsset(item.project.id);
-                        return toInsertPayload({ ...item, media: asset });
+                        if (item) {
+                            if (item.media || item.character || !item.project) return toInsertPayload(item);
+                            const { asset } = await getRemoteAsset(item.project.id);
+                            return toInsertPayload({ ...item, media: asset });
+                        }
+                        if (pickerItem?.asset) return toInsertPayload({ id: pickerItem.id, category: pickerItem.category, media: pickerItem.asset });
+                        throw new Error("所选资产已不存在，请重新选择");
                     }),
                 );
                 if (!payloads.length) return;

@@ -62,7 +62,7 @@ export const mainToolbarTools: ToolDefinition[] = [
         id: "tool-assets",
         toolbar: "main",
         category: "resource",
-        label: "素材库",
+        label: "插入素材",
         icon: <FolderOpen />,
         defaultVisible: true,
         defaultOrder: 60,

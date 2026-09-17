@@ -36,5 +36,6 @@ export function AssetMediaPreview({ asset, alt, className = "", fallback = null 
     const storageKey = asset.kind === "image" ? asset.data.storageKey : undefined;
     const imageUrl = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     if (!imageUrl && !storageKey) return fallback;
-    return <CachedResourceImage storageKey={storageKey} src={imageUrl} alt={alt} loading="lazy" decoding="async" className={className} fallback={fallback} />;
+    // 封面随本次绘制完成解码，避免异步解码后仍留白、直到悬停触发重绘才显示。
+    return <CachedResourceImage storageKey={storageKey} src={imageUrl} alt={alt} loading="lazy" decoding="sync" className={className} fallback={fallback} />;
 }
