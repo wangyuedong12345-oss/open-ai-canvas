@@ -17,7 +17,7 @@ export function PageHeader({ title, description, meta, actions }: { title: strin
     return (
         <header className="app-page-header flex min-h-14 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
-                <div className="min-w-0">
+                <div className="app-page-header-copy min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                         <h1 className="app-page-header-title truncate font-semibold leading-7">{title}</h1>
                         {meta}

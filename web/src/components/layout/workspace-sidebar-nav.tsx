@@ -1,21 +1,17 @@
-import { Popover } from "antd";
-import { Bell, ChevronDown, ChevronRight, CircleUserRound, History as HistoryIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
+import { ChevronRight, History as HistoryIcon, Infinity as InfinityIcon, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
-import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
 import { Kbd } from "@/components/ui/base/kbd";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { useWorkspaceLogout } from "@/hooks/use-workspace-logout";
-import { SystemAnnouncementCenter } from "@/components/layout/system-announcement-center";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { WorkspaceAccountCard } from "./workspace-account-card";
-import { WorkspaceWalletModal } from "./workspace-wallet-modal";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -59,37 +55,6 @@ function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: Wo
     return { groups, footer: [] };
 }
 
-function WorkspaceSidebarProfile({ collapsed, user }: { collapsed: boolean; user: NonNullable<ReturnType<typeof useUserStore.getState>["user"]> | null }) {
-    const [failed, setFailed] = useState(false);
-    const [menuOpen, setMenuOpen] = useState(false);
-    const [walletOpen, setWalletOpen] = useState(false);
-    const creditsEnabled = useUserStore((state) => state.features.creditsEnabled);
-    const avatarUrl = /^https?:\/\//i.test(user?.avatarUrl || "") ? user?.avatarUrl : "";
-    const profileName = user?.displayName || user?.username || "未登录";
-
-    useEffect(() => setFailed(false), [avatarUrl]);
-
-    if (!user) {
-        return <Link to="/login" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="登录" title="登录"><CircleUserRound className="size-5" /><span>登录</span></Link>;
-    }
-
-    const avatar = avatarUrl && !failed ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : <CircleUserRound aria-hidden />;
-    const content = <WorkspaceAccountCard onNavigate={() => setMenuOpen(false)} onWallet={() => { setMenuOpen(false); setWalletOpen(true); }} />;
-
-    return (
-        <div className={cn("app-workspace-sidebar-profile-row", collapsed && "is-collapsed")}>
-            <Popover open={menuOpen} onOpenChange={setMenuOpen} trigger="click" placement="topLeft" rootClassName="workspace-account-popover" content={content}>
-                <button type="button" className={cn("app-workspace-sidebar-profile", collapsed && "is-collapsed")} aria-label="打开账户菜单" title={profileName}>
-                    <span className="app-workspace-sidebar-profile-avatar">{avatar}</span>
-                    {!collapsed ? <span className="app-workspace-sidebar-profile-copy"><strong>{profileName}</strong><span>创作工作台</span></span> : null}
-                </button>
-            </Popover>
-            {creditsEnabled ? <WorkspaceWalletModal open={walletOpen} onClose={() => setWalletOpen(false)} /> : null}
-            {!collapsed ? <SystemAnnouncementCenter userId={user.id} className="app-workspace-sidebar-notification" /> : <span className="app-workspace-sidebar-notification-spacer" aria-hidden />}
-        </div>
-    );
-}
-
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance);
 
@@ -105,7 +70,7 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
 
     return (
         <div className="app-workspace-sidebar-brand-row relative shrink-0 px-3 pt-3">
-            <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
+            <a href="/welcome" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}欢迎页`}>
                 <span className="flex min-w-0 items-center gap-2">
                     <BrandLogoFrame className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm" logoClassName="size-5 object-contain" alt="" fallback={<InfinityIcon className="size-4" strokeWidth={2.2} />} />
                     <span className="flex min-w-0 flex-col">
@@ -113,7 +78,7 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
                         <span className="mt-1 truncate text-[var(--fs-label)] leading-none text-foreground/60">创作工作台</span>
                     </span>
                 </span>
-            </Link>
+            </a>
             <button type="button" className="app-workspace-sidebar-collapse-button" aria-label="收起侧栏" title="收起侧栏" onClick={onCollapse}>
                 <PanelLeftClose className="size-4" strokeWidth={1.7} />
             </button>
@@ -324,14 +289,13 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             </div>
             </LayoutGroup>
 
-            <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                <WorkspaceSidebarProfile collapsed={collapsed} user={user} />
-                {footer.length ? <div className="mt-2 flex flex-col gap-0.5">
+            {footer.length ? <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
+                <div className="flex flex-col gap-0.5">
                     {footer.map((item) => (
                         <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                     ))}
-                </div> : null}
-            </div>
+                </div>
+            </div> : null}
         </div>
     );
 }

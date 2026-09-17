@@ -10,11 +10,14 @@ export function CollectionToolbar({ children, trailing, active, onReset, label =
     onReset?: () => void;
     label?: string;
 }) {
+    const hasResetAction = Boolean(active && onReset);
+    const hasActions = hasResetAction || Boolean(trailing);
+
     return <section className="collection-toolbar" aria-label={label}>
         <div className="collection-toolbar-controls">{children}</div>
-        <div className="collection-toolbar-actions">
-            {active && onReset ? <Button type="text" icon={<RotateCcw />} onClick={onReset}>重置</Button> : null}
+        {hasActions ? <div className="collection-toolbar-actions">
+            {hasResetAction ? <Button type="text" icon={<RotateCcw />} onClick={onReset}>重置</Button> : null}
             {trailing}
-        </div>
+        </div> : null}
     </section>;
 }

@@ -327,6 +327,19 @@
     line-height: 1.5 !important;
 }
 
+.app-product-workspace .app-page-header-copy {
+    display: grid;
+    min-height: 48px;
+    min-width: 0;
+    grid-template-rows: auto auto;
+    align-content: center;
+    gap: var(--space-1);
+}
+
+.app-product-workspace .app-page-header-copy > p {
+    margin: 0 !important;
+}
+
 .app-product-workspace .app-page-header > div:last-child {
     gap: 8px;
 }
@@ -371,6 +384,36 @@
 .app-product-workspace .skill-library-grid {
     gap: 20px 16px;
 }
+@media (min-width: 900px) {
+    .app-user-workspace .assets-library-page .app-page-header {
+        align-items: stretch;
+    }
+    .app-user-workspace .assets-library-page .app-page-header > div:first-child {
+        align-items: stretch;
+    }
+    .app-user-workspace .assets-library-page .assets-header-actions {
+        display: grid;
+        height: 100%;
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        align-items: center;
+        gap: 0;
+    }
+    .app-user-workspace .assets-library-page .assets-header-actions .assets-storage-usage-percent {
+        text-align: left;
+    }
+    .app-user-workspace .assets-library-page .assets-header-actions .assets-storage-usage-title,
+    .app-user-workspace .assets-library-page .assets-header-actions .assets-storage-usage-value,
+    .app-user-workspace .assets-library-page .assets-header-actions .assets-storage-usage-percent {
+        font-size: var(--fs-caption);
+        line-height: 1.5;
+    }
+    .app-user-workspace .assets-library-page .library-toolbar {
+        margin-top: 24px;
+    }
+    .app-product-workspace .assets-library-page .assets-library-grid {
+        grid-template-columns: repeat(var(--assets-grid-columns, 6), minmax(0, 1fr));
+    }
+}
 .app-product-workspace .project-library-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 312px), 1fr)); gap: 24px; }
 
 .app-product-workspace .product-collection-card,
@@ -412,6 +455,19 @@
 }
 .app-product-workspace .skills-browse-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
 .app-product-workspace .skills-browse-bar .collection-toolbar { margin: 0; max-width: 100%; }
+
+@media (min-width: 900px) {
+    .app-product-workspace .skills-browse-bar > .collection-toolbar {
+        flex: 0 1 auto;
+        width: max-content;
+        margin-left: auto;
+    }
+
+    .app-product-workspace .skills-browse-bar > .collection-toolbar .collection-toolbar-controls {
+        flex: 0 0 auto;
+        justify-content: flex-end;
+    }
+}
 
 .app-product-workspace .skills-scope-panel { display: grid; gap: 28px; padding: 0; animation: none; }
 .app-product-workspace .skill-section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }

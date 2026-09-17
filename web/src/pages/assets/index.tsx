@@ -177,7 +177,6 @@ export default function AssetsPage() {
     );
     const visibleAssetIds = useMemo(() => visibleAssets.map((asset) => asset.id), [visibleAssets]);
     const allFilteredSelected = visibleAssetIds.length > 0 && visibleAssetIds.every((id) => selectedIds.includes(id));
-    const canCreateAsset = page === 1 && viewMode === "library" && !keyword.trim() && kindFilter === "all" && categoryFilter === "all" && folderFilter === "all";
     const totalAssets = assetPageQuery.data?.total ?? filteredAssets.length;
     const kindCounts = useMemo(() => assetCountMap(kindOptions, assetPageQuery.data?.kindCounts, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.kind), [activeAssets, assetPageQuery.data?.kindCounts, trashAssets, viewMode]);
     const categoryCounts = useMemo(() => assetCountMap(categoryOptions, assetPageQuery.data?.categoryCounts, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.category || "other"), [activeAssets, assetPageQuery.data?.categoryCounts, trashAssets, viewMode]);
@@ -585,7 +584,7 @@ export default function AssetsPage() {
             <WorkspacePage grid className="library-page assets-library-page canvas-library-page">
                 <div className="studio-band">
                     <PageHeader
-                        title={viewMode === "trash" ? "素材库 / 回收站" : "素材库"}
+                        title={viewMode === "trash" ? "资产库 / 回收站" : "资产库"}
                         description={viewMode === "trash" ? "已删除画布或手动归档的临时素材，可随时还原或彻底清理。" : "管理文本、图片、视频、音频和 3D 模型素材。"}
                         meta={<span className="app-projects-header-meta assets-header-meta">{headerAssetCount} 个素材</span>}
                         actions={
@@ -615,30 +614,28 @@ export default function AssetsPage() {
                                                     setSelectedIds([]);
                                                 }}
                                             >
-                                                返回素材库
+                                                返回资产库
                                             </Button>
                                         </>
                                     ) : (
                                         <>
-                                            <Button icon={<Plus className="size-3.5" />} onClick={openCreate}>
+                                            <Button type="primary" icon={<Plus className="size-3.5" />} onClick={openCreate}>
                                                 新增素材
                                             </Button>
                                             <Button icon={<Images className="size-3.5" />} onClick={() => setBatchUploadOpen(true)}>
-                                                批量上传图片
+                                                上传图片
                                             </Button>
-                                            <Button icon={<FolderOpen className="size-3.5" />} onClick={() => navigate("/plugins/eagle")}>
-                                                Eagle 素材库
-                                            </Button>
-                                            <Button aria-label="导出全部素材" title="导出全部素材" icon={<Download className="size-3.5" />} onClick={() => void exportAllAssets()} />
                                             <Dropdown
                                                 trigger={["click"]}
                                                 menu={{
                                                     items: [
+                                                        { key: "eagle", icon: <FolderOpen className="size-4" />, label: "Eagle 素材库", onClick: () => navigate("/plugins/eagle") },
                                                         { key: "package", icon: <FileUp className="size-4" />, label: "导入素材包", onClick: () => assetInputRef.current?.click() },
+                                                        { key: "export", icon: <Download className="size-4" />, label: "导出全部素材", onClick: () => void exportAllAssets() },
                                                     ],
                                                 }}
                                             >
-                                                <Button aria-label="导入素材" title="导入素材" icon={<FileUp className="size-3.5" />} />
+                                                <Button type="text" aria-label="更多素材操作" icon={<MoreHorizontal className="size-4" />} />
                                             </Dropdown>
                                         </>
                                     )}
@@ -653,6 +650,26 @@ export default function AssetsPage() {
                         filtersAlwaysVisible
                         filters={
                             <>
+                                <Select
+                                    value={kindFilter}
+                                    className="w-full sm:w-36"
+                                    options={kindOptions.map((option) => ({ ...option, label: `${option.value === "all" ? "全部类型" : option.label} · ${kindCounts.get(option.value) || 0}` }))}
+                                    onChange={(value) => {
+                                        setViewMode("library");
+                                        setKindFilter(value as AssetKind | "all");
+                                        setPage(1);
+                                    }}
+                                />
+                                <Select
+                                    value={categoryFilter}
+                                    className="w-full sm:w-36"
+                                    options={categoryOptions.map((option) => ({ ...option, label: `${option.label} · ${categoryCounts.get(option.value) || 0}` }))}
+                                    onChange={(value) => {
+                                        setViewMode("library");
+                                        setCategoryFilter(value as AssetCategory | "all");
+                                        setPage(1);
+                                    }}
+                                />
                                 {kindFilter !== "all" ? <Tag closable onClose={() => { setKindFilter("all"); setPage(1); }}>类型：{kindOptions.find((option) => option.value === kindFilter)?.label}</Tag> : null}
                                 {categoryFilter !== "all" ? <Tag closable onClose={() => { setCategoryFilter("all"); setPage(1); }}>用途：{assetCategoryLabel(categoryFilter)}</Tag> : null}
                                 {folderFilter !== "all" ? <Tag closable onClose={() => { setFolderFilter("all"); setPage(1); }}>文件夹：{folderFilter === "uncategorized" ? "未整理" : folders.find((folder) => folder.id === folderFilter)?.name || "未知"}</Tag> : null}
@@ -663,17 +680,17 @@ export default function AssetsPage() {
                                 value={gridDensity}
                                 className="w-full sm:w-32"
                                 suffixIcon={<LayoutGrid className="size-3.5" />}
-                                options={[{ label: "舒适 · 6 列", value: 6 }, { label: "标准 · 8 列", value: 8 }, { label: "紧凑 · 10 列", value: 10 }]}
+                                options={[{ label: "舒适", value: 6 }, { label: "标准", value: 8 }, { label: "紧凑", value: 10 }]}
                                 onChange={(value) => setGridDensity(value as AssetGridDensity)}
                             />
                         }
                     >
                         <Input
                             allowClear
-                            className="w-full sm:w-80"
+                            className="w-full sm:w-[280px]"
                             prefix={<Search className="size-4 text-foreground/40" />}
                             value={keyword}
-                            placeholder="搜索标题、内容或标签"
+                            placeholder="搜索标题、内容、标签或来源"
                             onChange={(event) => {
                                 setPage(1);
                                 setKeyword(event.target.value);
@@ -685,30 +702,6 @@ export default function AssetsPage() {
                 <div className="canvas-library-frame assets-library-frame">
                     <div className="assets-collection-layout">
                         <aside className="assets-collection-filters thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-x-hidden lg:overflow-y-auto lg:pr-3" aria-label="素材分类">
-                            <div className="assets-collection-filter-scroll">
-                                <AssetFilterGroup
-                                    title="素材类型"
-                                    options={kindOptions}
-                                    value={viewMode === "library" ? kindFilter : ""}
-                                    counts={kindCounts}
-                                    onChange={(value) => {
-                                        setViewMode("library");
-                                        setKindFilter(value as AssetKind | "all");
-                                        setPage(1);
-                                    }}
-                                />
-                                <AssetFilterGroup
-                                    title="业务分类"
-                                    options={categoryOptions}
-                                    value={viewMode === "library" ? categoryFilter : ""}
-                                    counts={categoryCounts}
-                                    onChange={(value) => {
-                                        setViewMode("library");
-                                        setCategoryFilter(value as AssetCategory | "all");
-                                        setPage(1);
-                                    }}
-                                />
-                            </div>
                             <div>
                                 <div className="mb-1.5 flex items-center justify-between px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">
                                     <span>我的分类</span>
@@ -740,7 +733,6 @@ export default function AssetsPage() {
                                 </div>
                             </div>
                             <div className="mt-6 border-t border-border/40 pt-3">
-                                <div className="mb-1.5 px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">垃圾箱与归档</div>
                                 <div className="assets-folder-row">
                                     <button
                                         type="button"
@@ -807,15 +799,6 @@ export default function AssetsPage() {
                                         <WorkspaceState icon="assets" compact title="没有匹配的素材" description="调整关键词、类型、用途或文件夹后再试。" />
                                     ) : (
                                         <CollectionGrid className="library-grid assets-library-grid" style={{ "--assets-grid-columns": gridDensity } as React.CSSProperties}>
-                                            {canCreateAsset ? (
-                                                <button type="button" className="library-create-card" onClick={openCreate}>
-                                                    <span className="library-create-cover">
-                                                        <Plus className="size-8" />
-                                                    </span>
-                                                    <span className="library-create-title">新增素材</span>
-                                                    <span className="library-create-meta">文本、图片、音视频或模型</span>
-                                                </button>
-                                            ) : null}
                                             {visibleAssets.map((asset) => (
                                                 <AssetCard
                                                     key={asset.id}
@@ -1071,7 +1054,7 @@ export default function AssetsPage() {
                 okText="移入回收站"
                 cancelText="取消"
             >
-                确定将「{archivingAsset?.title}」移入回收站吗？移入后不会出现在正常素材库中，可在回收站随时还原。
+                确定将「{archivingAsset?.title}」移入回收站吗？移入后不会出现在正常资产库中，可在回收站随时还原。
             </Modal>
             <Modal
                 className="library-modal library-confirm-modal"
@@ -1170,7 +1153,7 @@ function AssetCard({
 }) {
     const summary = assetSummary(asset);
     const menuItems: MenuProps["items"] = isTrash
-        ? [{ key: "restore", icon: <RotateCcw className="size-3.5" />, label: "还原到素材库", onClick: onRestore }, { type: "divider" as const }, { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "彻底删除", onClick: onDelete }]
+        ? [{ key: "restore", icon: <RotateCcw className="size-3.5" />, label: "还原到资产库", onClick: onRestore }, { type: "divider" as const }, { key: "delete", danger: true, icon: <Trash2 className="size-3.5" />, label: "彻底删除", onClick: onDelete }]
         : [
               ...(asset.kind === "text" || asset.kind === "image" ? [{ key: "edit", icon: <PencilLine className="size-3.5" />, label: "编辑", onClick: onEdit }] : []),
               ...(asset.kind === "text" ? [{ key: "copy", icon: <Copy className="size-3.5" />, label: "复制文本", onClick: () => void onCopy(asset) }] : []),
@@ -1372,7 +1355,7 @@ function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; 
                     </figure>
                 ))}
                 <span className="assets-empty-banner-caption">
-                    <span>{brandName}素材库</span>把每次创作的结果，留档成可复用的资产
+                    <span>{brandName}资产库</span>把每次创作的结果，留档成可复用的资产
                 </span>
             </div>
             <div className="assets-empty-cards">
@@ -1395,41 +1378,10 @@ function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; 
                         <Clapperboard />
                     </span>
                     <strong>去画布保存</strong>
-                    <span>把画布上满意的镜头与画面留档进素材库。</span>
+                    <span>把画布上满意的镜头与画面留档进资产库。</span>
                 </button>
             </div>
         </div>
-    );
-}
-
-function AssetFilterGroup({
-    title,
-    options,
-    value,
-    counts,
-    onChange,
-}: {
-    title: string;
-    options: Array<{ label: string; value: string }>;
-    value: string;
-    counts: Map<string, number>;
-    onChange: (value: string) => void;
-}) {
-    return (
-        <section className="collection-filter-group">
-            <span className="collection-filter-label">{title}</span>
-            <div className="collection-filter-options">
-                {options.map((option) => {
-                    const active = value === option.value;
-                    return (
-                        <button key={option.value} type="button" aria-pressed={active} className={`assets-filter-item ${active ? "is-active" : ""}`} onClick={() => onChange(option.value)}>
-                            <span className="assets-filter-item-label">{option.label}</span>
-                            <span className="assets-filter-count">{counts.get(option.value) || 0}</span>
-                        </button>
-                    );
-                })}
-            </div>
-        </section>
     );
 }
 
