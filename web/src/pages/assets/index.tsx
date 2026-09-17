@@ -653,26 +653,6 @@ export default function AssetsPage() {
                         filtersAlwaysVisible
                         filters={
                             <>
-                                <Select
-                                    value={kindFilter}
-                                    className="w-full sm:w-36"
-                                    options={kindOptions.map((option) => ({ ...option, label: `${option.value === "all" ? "全部类型" : option.label} · ${kindCounts.get(option.value) || 0}` }))}
-                                    onChange={(value) => {
-                                        setViewMode("library");
-                                        setKindFilter(value as AssetKind | "all");
-                                        setPage(1);
-                                    }}
-                                />
-                                <Select
-                                    value={categoryFilter}
-                                    className="w-full sm:w-36"
-                                    options={categoryOptions.map((option) => ({ ...option, label: `${option.label} · ${categoryCounts.get(option.value) || 0}` }))}
-                                    onChange={(value) => {
-                                        setViewMode("library");
-                                        setCategoryFilter(value as AssetCategory | "all");
-                                        setPage(1);
-                                    }}
-                                />
                                 {kindFilter !== "all" ? <Tag closable onClose={() => { setKindFilter("all"); setPage(1); }}>类型：{kindOptions.find((option) => option.value === kindFilter)?.label}</Tag> : null}
                                 {categoryFilter !== "all" ? <Tag closable onClose={() => { setCategoryFilter("all"); setPage(1); }}>用途：{assetCategoryLabel(categoryFilter)}</Tag> : null}
                                 {folderFilter !== "all" ? <Tag closable onClose={() => { setFolderFilter("all"); setPage(1); }}>文件夹：{folderFilter === "uncategorized" ? "未整理" : folders.find((folder) => folder.id === folderFilter)?.name || "未知"}</Tag> : null}
@@ -703,11 +683,35 @@ export default function AssetsPage() {
                 </div>
 
                 <div className="canvas-library-frame assets-library-frame">
-                    <div className="grid min-h-0 gap-4 lg:grid-cols-[208px_minmax(0,1fr)]">
-                        <aside className="thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-x-hidden lg:overflow-y-auto lg:pr-3">
+                    <div className="assets-collection-layout">
+                        <aside className="assets-collection-filters thin-scrollbar flex gap-2 overflow-x-auto py-3 lg:sticky lg:top-0 lg:block lg:max-h-[calc(100vh-150px)] lg:overflow-x-hidden lg:overflow-y-auto lg:pr-3" aria-label="素材分类">
+                            <div className="assets-collection-filter-scroll">
+                                <AssetFilterGroup
+                                    title="素材类型"
+                                    options={kindOptions}
+                                    value={viewMode === "library" ? kindFilter : ""}
+                                    counts={kindCounts}
+                                    onChange={(value) => {
+                                        setViewMode("library");
+                                        setKindFilter(value as AssetKind | "all");
+                                        setPage(1);
+                                    }}
+                                />
+                                <AssetFilterGroup
+                                    title="业务分类"
+                                    options={categoryOptions}
+                                    value={viewMode === "library" ? categoryFilter : ""}
+                                    counts={categoryCounts}
+                                    onChange={(value) => {
+                                        setViewMode("library");
+                                        setCategoryFilter(value as AssetCategory | "all");
+                                        setPage(1);
+                                    }}
+                                />
+                            </div>
                             <div>
                                 <div className="mb-1.5 flex items-center justify-between px-1 text-[var(--fs-tiny)] font-semibold uppercase tracking-[0.08em] text-foreground/38">
-                                    <span>文件夹</span>
+                                    <span>我的分类</span>
                                     <button type="button" className="assets-folder-add" title="新建文件夹" aria-label="新建文件夹" onClick={() => { setFolderName(""); setFolderEditor("new"); }}><FolderPlus className="size-3.5" /></button>
                                 </div>
                                 <div className="space-y-0.5">
@@ -1395,6 +1399,37 @@ function AssetsEmptyState({ onNew, onImport, onGoCanvas }: { onNew: () => void; 
                 </button>
             </div>
         </div>
+    );
+}
+
+function AssetFilterGroup({
+    title,
+    options,
+    value,
+    counts,
+    onChange,
+}: {
+    title: string;
+    options: Array<{ label: string; value: string }>;
+    value: string;
+    counts: Map<string, number>;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <section className="collection-filter-group">
+            <span className="collection-filter-label">{title}</span>
+            <div className="collection-filter-options">
+                {options.map((option) => {
+                    const active = value === option.value;
+                    return (
+                        <button key={option.value} type="button" aria-pressed={active} className={`assets-filter-item ${active ? "is-active" : ""}`} onClick={() => onChange(option.value)}>
+                            <span className="assets-filter-item-label">{option.label}</span>
+                            <span className="assets-filter-count">{counts.get(option.value) || 0}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        </section>
     );
 }
 

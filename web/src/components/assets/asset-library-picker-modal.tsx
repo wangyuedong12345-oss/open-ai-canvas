@@ -153,7 +153,6 @@ export function AssetLibraryPickerModal({
         kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : "文本", searchText: (asset.tags ?? []).join(" "),
         ...(items.find((item) => item.id === asset.id) || { disabledReason: "此素材不适用于当前操作" }),
     })), [remoteQuery.data, items]);
-    const effectivePagination = remoteEnabled ? { current: remotePage, pageSize: remotePageSize, total: remoteQuery.data?.total || 0, onChange: (page: number, pageSize: number) => { setRemotePage(page); setRemotePageSize(pageSize); } } : pagination;
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const initialSelectedIdsRef = useRef(initialSelectedIds);
     const itemsRef = useRef(items);
@@ -168,12 +167,20 @@ export function AssetLibraryPickerModal({
     }, [items, remoteItems, remoteItemsCache, uploadedItems]);
     itemsRef.current = allItems;
     const localItems = useMemo(() => allItems.filter((item) => !item.external), [allItems]);
+    // 远端成功且有可展示素材时用远端。真正的空结果保持空列表。
+    // 仅在远端空而本地仍有素材、或远端总数>0 但本页全被排除时回退本地，避免合法空搜索被缓存铺满。
+    const remoteTotal = remoteQuery.data?.total ?? 0;
+    const remoteReady = remoteEnabled && remoteQuery.isSuccess;
+    const preferLocalUnsynced = remoteReady && remoteTotal === 0 && localItems.length > 0;
+    const remoteEntityOnlyPage = remoteReady && remoteItems.length === 0 && remoteTotal > 0;
+    const useRemoteItems = remoteReady && !preferLocalUnsynced && !remoteEntityOnlyPage && (remoteItems.length > 0 || remoteTotal === 0);
+    const effectivePagination = useRemoteItems ? { current: remotePage, pageSize: remotePageSize, total: remoteTotal, onChange: (page: number, pageSize: number) => { setRemotePage(page); setRemotePageSize(pageSize); } } : pagination;
     const pluginItems = useMemo(() => allItems.filter((item) => Boolean(item.external)), [allItems]);
     const hasPluginSource = useMemo(() => Object.keys(categoryLabels).some((value) => value.startsWith("external:")) || pluginItems.some((item) => item.category.startsWith("external:")), [categoryLabels, pluginItems]);
     const mediaKindSourceItems = useMemo(() => {
-        const base = source === "plugin" ? pluginItems : remoteEnabled ? remoteItems : localItems;
+        const base = source === "plugin" ? pluginItems : useRemoteItems ? remoteItems : localItems;
         return base;
-    }, [localItems, pluginItems, remoteEnabled, remoteItems, source]);
+    }, [localItems, pluginItems, remoteItems, source, useRemoteItems]);
     const sourceItems = useMemo(() => mediaKind === "all" ? mediaKindSourceItems : mediaKindSourceItems.filter((item) => pickerItemMediaKind(item) === mediaKind), [mediaKind, mediaKindSourceItems]);
     const activeSourceItems = useMemo(() => sourceItems.filter((item) => !item.archived), [sourceItems]);
     const activeMediaKindSourceItems = useMemo(() => mediaKindSourceItems.filter((item) => !item.archived), [mediaKindSourceItems]);
@@ -198,9 +205,9 @@ export function AssetLibraryPickerModal({
     const sourceFolders = source === "plugin" ? folders : [];
     const showCategories = source === "local" || !sourceFolders.length;
     const normalCategories = useMemo(() => {
-        if (!remoteEnabled) return ["all", ...Array.from(new Set(activeSourceItems.map((item) => normalizePickerCategory(item.category)))).filter((value) => value !== "all")];
+        if (!useRemoteItems) return ["all", ...Array.from(new Set(activeSourceItems.map((item) => normalizePickerCategory(item.category)))).filter((value) => value !== "all")];
         return ["all", ...Array.from(new Set(Object.keys(categoryLabels).filter((value) => value !== "all" && value !== "archived" && !value.startsWith("external:")).map(normalizePickerCategory)))].filter((value, index, values) => values.indexOf(value) === index);
-    }, [activeSourceItems, categoryLabels, remoteEnabled]);
+    }, [activeSourceItems, categoryLabels, useRemoteItems]);
     const archivedCount = archivedItems.length;
     const selectableSourceItems = showRecycleBin ? sourceItems : activeSourceItems;
 
@@ -213,9 +220,9 @@ export function AssetLibraryPickerModal({
                 return false;
             }
             if (folderId !== "all" && (item.folderId || "") !== folderId) return false;
-            return remoteEnabled || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
+            return useRemoteItems || !query || [item.title, item.searchText || "", item.description || ""].join(" ").toLowerCase().includes(query);
         });
-    }, [category, folderId, keyword, recycleBinActive, remoteEnabled, selectableSourceItems]);
+    }, [category, folderId, keyword, recycleBinActive, selectableSourceItems, useRemoteItems]);
     const selectedIds = useMemo(
         () =>
             Array.from(selected).filter((id) => {
@@ -526,7 +533,7 @@ export function AssetLibraryPickerModal({
                     </nav>
                     <div className="asset-picker-grid-wrap">
                         <div className="asset-picker-grid">
-                            {remoteEnabled && remoteQuery.isError ? <div role="alert">素材读取失败<Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || (remoteEnabled && remoteQuery.isFetching) ? (
+                            {remoteEnabled && remoteQuery.isError ? <div role="alert">素材读取失败<Button onClick={() => void remoteQuery.refetch()}>重试</Button></div> : loading || (useRemoteItems && remoteQuery.isFetching) ? (
                                 <div className="asset-picker-empty">
                                     <LoaderCircle className="animate-spin" />
                                     <strong>正在读取素材</strong>
