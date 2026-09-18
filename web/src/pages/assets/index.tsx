@@ -1496,7 +1496,7 @@ function assetArchiveFacts(asset: LibraryAsset) {
         { label: "分类", value: assetCategoryLabel(asset.category) },
     ];
     if (asset.kind === "image" || asset.kind === "video") {
-        facts.push({ label: "尺寸", value: `${asset.data.width}x${asset.data.height}` });
+        facts.push({ label: "尺寸", value: assetSizeLabel(asset.data.width, asset.data.height) });
     }
     if (asset.kind === "video" || asset.kind === "audio") {
         facts.push({ label: "时长", value: formatAssetClock(asset.data.durationMs) || "未知" });
@@ -1515,7 +1515,7 @@ function assetSummary(asset: LibraryAsset) {
     if (asset.kind === "text") return asset.data.content;
     if (asset.kind === "audio") return `${formatAssetDuration(asset.data.durationMs)} · ${assetFileFormat(asset.data.mimeType)}`;
     if (asset.kind === "model") return `${asset.data.fileName} · ${assetFileFormat(asset.data.mimeType, asset.data.fileName)}`;
-    return `${asset.data.width}x${asset.data.height} · ${assetFileFormat(asset.data.mimeType)}`;
+    return `${assetSizeLabel(asset.data.width, asset.data.height)} · ${assetFileFormat(asset.data.mimeType)}`;
 }
 
 function assetFileFormat(mimeType?: string, fileName?: string) {
@@ -1524,6 +1524,10 @@ function assetFileFormat(mimeType?: string, fileName?: string) {
     const format = subtype || extension;
     if (!format) return "未知格式";
     return format.toLowerCase() === "jpeg" ? "JPEG" : format.toUpperCase();
+}
+
+function assetSizeLabel(width: number, height: number) {
+    return width > 0 && height > 0 ? `${width}x${height}` : "未知";
 }
 
 function StorageTag({ asset }: { asset: LibraryAsset }) {

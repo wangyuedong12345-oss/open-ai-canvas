@@ -71,3 +71,6 @@ backend/cmd/server/server
 
 # Local ComfyUI bridge binaries published into the dev public directory.
 web/public/OpenAICanvas-ComfyBridge*
+
+# One-off local probe scripts and their compiled output.
+backend/tmp_*

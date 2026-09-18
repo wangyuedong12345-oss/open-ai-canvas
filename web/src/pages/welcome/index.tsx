@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Button, ConfigProvider, Tabs } from "antd";
-import { ArrowDown, ArrowRight, ArrowUpRight, Code2, Pause, Play, X } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUpRight, Code2, Menu, Pause, Play, X } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { IconButton } from "@/components/ui/base/buttons";
@@ -38,6 +38,7 @@ function WelcomeExperience({ look, brandName }: { look: WelcomeLook; brandName: 
     const [paused, setPaused] = useState(false);
     const [failed, setFailed] = useState(false);
     const [ready, setReady] = useState(false);
+    const [menu, setMenu] = useState(false);
     const [showcase, setShowcase] = useState(1);
     const [playing, setPlaying] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -76,6 +77,7 @@ function WelcomeExperience({ look, brandName }: { look: WelcomeLook; brandName: 
         if (!storyRef.current) return;
         const height = storyRef.current.offsetHeight - window.innerHeight;
         window.scrollTo({ top: storyRef.current.offsetTop + height * (index === 5 ? 0.97 : index / 6 + (index ? 0.04 : 0)), behavior: reduced ? "instant" : "smooth" });
+        setMenu(false);
     };
     const staticScene = reduced || failed;
     const active = showcases[showcase];
@@ -88,7 +90,13 @@ function WelcomeExperience({ look, brandName }: { look: WelcomeLook; brandName: 
                     <BrandLogo theme="dark" className="welcome-brand-logo" alt="" fallback={<span className="welcome-brand-logo is-fallback" />} />
                     {brandName}
                 </a>
+                <nav className={menu ? "welcome-nav is-open" : "welcome-nav"} aria-label="首页导航">
+                    <a href="#workbench" onClick={() => setMenu(false)}>工作台</a>
+                    <a href="#contributors" onClick={() => setMenu(false)}>贡献者</a>
+                    <a href={github} target="_blank" rel="noreferrer">GitHub<ArrowUpRight size={13} /></a>
+                </nav>
                 <Button className="welcome-header-cta" type="primary" href="/create" icon={<ArrowUpRight size={16} />} iconPlacement="end">开始创作</Button>
+                <IconButton className="welcome-icon mobile-menu" variant="ghost" size="lg" icon={menu ? X : Menu} aria-label={menu ? "关闭菜单" : "打开菜单"} aria-expanded={menu} onClick={() => setMenu(!menu)} />
             </header>
 
             <main>
