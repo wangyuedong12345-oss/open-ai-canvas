@@ -322,6 +322,59 @@
     z-index: -1;
 }
 
+.canvas-agent-pet {
+    display: block;
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    background-image: url("/images/agent-pet-sprite.png");
+    background-position: 0 0;
+    background-repeat: no-repeat;
+    background-size: 300% 100%;
+    filter: drop-shadow(0 8px 12px color-mix(in srgb, var(--canvas-agent-launcher-shadow) 44%, transparent));
+    transform-origin: center bottom;
+    animation: canvas-agent-pet-idle 2.8s ease-in-out infinite;
+    transition: filter 180ms ease, transform 180ms ease;
+}
+
+.canvas-agent-launcher:hover .canvas-agent-pet,
+.canvas-agent-launcher:focus-visible .canvas-agent-pet {
+    background-position: 50% 0;
+    animation: canvas-agent-pet-hover 760ms ease-in-out infinite;
+    filter: drop-shadow(0 9px 15px color-mix(in srgb, var(--canvas-agent-launcher-shadow) 54%, transparent));
+}
+
+.canvas-agent-pet.is-sleeping {
+    background-position: 100% 0;
+    animation: canvas-agent-pet-sleep 3.8s ease-in-out infinite;
+}
+
+.canvas-agent-launcher:hover .canvas-agent-pet.is-sleeping,
+.canvas-agent-launcher:focus-visible .canvas-agent-pet.is-sleeping {
+    background-position: 50% 0;
+    animation: canvas-agent-pet-hover 760ms ease-in-out infinite;
+}
+
+@keyframes canvas-agent-pet-idle {
+    0%, 100% { transform: translateY(0) rotate(-1deg); }
+    50% { transform: translateY(-2px) rotate(1deg); }
+}
+
+@keyframes canvas-agent-pet-hover {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    50% { transform: translateY(-4px) rotate(2deg); }
+}
+
+@keyframes canvas-agent-pet-sleep {
+    0%, 100% { transform: translateY(1px) scaleY(.98); }
+    50% { transform: translateY(2px) scaleY(1); }
+}
+
+.canvas-agent-pet.is-reduced-motion {
+    animation: none !important;
+    transform: none !important;
+}
+
 .canvas-agent-launcher-label {
     position: absolute;
     bottom: -17px;

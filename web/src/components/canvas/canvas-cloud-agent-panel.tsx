@@ -8,7 +8,6 @@ import { markdownPlainText } from "@/lib/markdown-plain-text";
 import { nanoid } from "nanoid";
 
 import { ModelPicker } from "@/components/model-picker";
-import { FluidOrb } from "@/components/ui/fluid-orb";
 import { cn } from "@/lib/utils";
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import type { CanvasResourceReference } from "@/lib/canvas/canvas-resource-references";
@@ -19,6 +18,7 @@ import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentat
 import { agentApprovalMatchesSettings, agentImageApproval } from "@/lib/canvas/agent-media-approval";
 import type { AgentMediaSettings } from "@/services/api/agent";
 import { CanvasAgentImageApprovalSettings } from "./canvas-agent-image-approval-settings";
+import { CanvasAgentPet } from "./canvas-agent-pet";
 import { addSkill, listAddedSkills, listSkills, type Skill, type SkillCategory } from "@/services/api/skills";
 import { clearCloudAgentPendingSubmission, cloudAgentConversationTitle, loadCloudAgentConversations, loadCloudAgentPendingSubmission, saveCloudAgentConversations, saveCloudAgentPendingSubmission, type CloudAgentConversation, type CloudAgentPendingSubmission } from "@/services/cloud-agent-conversations";
 import { logicalModelIDForConfig, modelOptionName, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
@@ -764,7 +764,7 @@ function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, onO
             whileTap={reducedMotion ? undefined : { scale: 0.96 }}
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
         >
-            <FluidOrb size={62} color="#7164f6" />
+            <CanvasAgentPet reducedMotion={reducedMotion} />
             <span className="canvas-agent-launcher-label">Agent</span>
             <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
             {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}

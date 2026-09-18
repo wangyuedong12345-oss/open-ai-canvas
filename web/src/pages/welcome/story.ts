@@ -12,6 +12,7 @@ export type WelcomeLook = {
     label: string;
     title: string;
     frames: string[];
+    background?: string;
     screenplay: string[];
     video?: string;
     credit?: string;
@@ -23,6 +24,7 @@ export const welcomeLooks: WelcomeLook[] = [
     {
         id: "spring", label: "Spring · 奇幻", title: "山谷之春",
         frames: reelFrames("spring", ["1807", "1669", "4336", "3191", "3250"]),
+        background: "/welcome/spring/bg.webp",
         screenplay: ["外景 · 山谷 · 黎明", "云海漫过山脊。", "她握紧手中的木杖。", "一条小路，通往谷底。", "石壁投下巨大的影子。", "她停下，望向高处。", "风声忽然安静。", "微光落在她的脸上。", "沉睡的山谷开始苏醒。", "她向前迈出一步。", "远处，第一片新叶展开。", "春天，终于来到。"],
         credit: "Spring · Blender 开放电影演示素材",
     },
