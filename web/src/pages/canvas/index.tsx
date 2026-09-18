@@ -360,6 +360,8 @@ export default function CanvasPage() {
                     if (remoteSyncEnabled) {
                         try {
                             await saveRemoteUserDataNow(importedProjectId);
+                            // 导入流程已经完成独立的云端保存，避免列表卡片继续沿用导入阶段的上传遮罩。
+                            useSyncProgressStore.getState().setProjectProgress(importedProjectId, null);
                         } catch (syncError) {
                             remoteSyncWarning ||= syncError;
                             scheduleRemoteUserDataSync();
