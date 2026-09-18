@@ -370,7 +370,7 @@ export default function PluginsPage() {
                                                                         </span>
                                                                         <div className="min-w-0 flex-1">
                                                                             <div className="plugin-card-title-row">
-                                                                                <h3>{plugin.manifest.name}</h3>
+                                                                                <h3 className="library-card-title">{plugin.manifest.name}</h3>
                                                                                 <span className="plugin-version">v{plugin.manifest.version}</span>
                                                                             </div>
                                                                             <div className="plugin-card-labels">

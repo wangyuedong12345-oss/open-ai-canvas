@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,6 +18,46 @@ import (
 
 	"infinite-canvas/backend/internal/protocol"
 )
+
+func TestDeclarativeTextCreateParsesStreamWithJSONContentType(t *testing.T) {
+	for _, streamRequested := range []bool{true, false} {
+		t.Run(fmt.Sprintf("stream=%t", streamRequested), func(t *testing.T) {
+			t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Errorf("decode request: %v", err)
+				}
+				if (body["stream"] == true) != streamRequested {
+					t.Errorf("stream request = %#v, want %t", body["stream"], streamRequested)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"生成\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"成功\"}}]}\n\ndata: [DONE]\n\n"))
+			}))
+			defer server.Close()
+
+			manifest, err := os.ReadFile(filepath.Join("..", "..", "..", "plugin-packages", "deepseek-chat", "manifest.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			adapter, err := protocol.LoadManifest(manifest)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var deltas strings.Builder
+			result, err := runProtocolAdapterTask(context.Background(), canvasGenerationInput{
+				Mode: "text", Prompt: "测试", Config: providerConfig{BaseURL: server.URL, APIKey: "key", Model: "deepseek-v4-flash", InterfaceType: "deepseek-chat"}, StreamText: streamRequested,
+				OnTextDelta: func(delta string) { deltas.WriteString(delta) },
+			}, adapter)
+			if err != nil {
+				t.Fatalf("runProtocolAdapterTask() error = %v", err)
+			}
+			if result["text"] != "生成成功" || deltas.String() != "生成成功" {
+				t.Fatalf("result = %#v, deltas = %q", result, deltas.String())
+			}
+		})
+	}
+}
 
 func TestPluginViewIncludesDocumentationForEveryOfficialProtocol(t *testing.T) {
 	center, err := newPluginRuntime(t.TempDir())

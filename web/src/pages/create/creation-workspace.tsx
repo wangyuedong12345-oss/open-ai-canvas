@@ -217,9 +217,33 @@ export function CreationMessageView({ item, shotNumber, onRetryFailure, onCreate
         );
     const toolStatus: GenerationToolStatus = item.status === "pending" ? "running" : item.status === "error" ? "error" : item.status === "cancelled" ? "cancelled" : "completed";
     return <article className={`creation-assistant-message is-${mode}`}>
-        {mode === "text" ? <><div className="creation-message-heading">{heading}</div>{item.reasoning ? <div className="creation-message-reasoning-wrap"><MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming"} /></div> : null}<div className="creation-message-content">{item.content ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown> : <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><WorkingDots dotSize={5} gap={2} /><span>正在生成…</span></span>}</div></> : <GenerationToolCard status={toolStatus} heading={heading}><MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onContinueCanvas={onContinueCanvas} openingCanvas={openingCanvas} /></GenerationToolCard>}
+        {mode === "text" ? <><div className="creation-message-heading">{heading}</div>{item.reasoning ? <div className="creation-message-reasoning-wrap"><MessageReasoning reasoning={item.reasoning} isStreaming={item.status === "streaming"} /></div> : null}<div className="creation-message-content">{item.content ? <CreationTextResult item={item} /> : <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><WorkingDots dotSize={5} gap={2} /><span>正在生成…</span></span>}</div></> : <GenerationToolCard status={toolStatus} heading={heading}><MediaResult item={item} onRetryFailure={onRetryFailure} onCreateVariant={onCreateVariant} onContinueCanvas={onContinueCanvas} openingCanvas={openingCanvas} /></GenerationToolCard>}
         {item.error && mode === "text" ? <div className="creation-message-error"><span>{generationErrorMessage(item.error)}</span><button type="button" onClick={onRetryFailure}><RefreshCw />重新生成</button></div> : null}
     </article>;
+}
+
+function CreationTextResult({ item }: { item: CreationMessage }) {
+    const copyText = useCopyText();
+    const content = item.content.trim();
+    const scriptStart = content.search(/^\s*(?:#{1,6}\s*)?(?:\*{1,2})?剧本\s*[:：]/m);
+    const intro = scriptStart > 0 ? content.slice(0, scriptStart).replace(/(?:^|\n)\s*(?:---+|\*\*\*+|___+)\s*$/, "").trim() : "";
+    const script = scriptStart >= 0 ? content.slice(scriptStart).trim() : "";
+    const downloadText = () => {
+        const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `创作文本-${item.id.slice(0, 8)}.md`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+    };
+
+    return <>
+        {script ? <>{intro ? <AIMessageMarkdown isStreaming={item.status === "streaming"}>{intro}</AIMessageMarkdown> : null}<pre className="creation-text-script-block"><code>{script}</code></pre></> : <AIMessageMarkdown isStreaming={item.status === "streaming"}>{item.content}</AIMessageMarkdown>}
+        {item.status === "done" ? <div className="creation-text-result-actions"><button type="button" onClick={downloadText}><Download />下载文本</button><button type="button" onClick={() => copyText(content, "文本已复制")}><Copy />复制文本</button></div> : null}
+    </>;
 }
 
 function CreationUserMessage({ item, shotNumber, onEditUserMessage }: { item: CreationMessage; shotNumber: number; onEditUserMessage: (text: string) => void }) {

@@ -745,6 +745,33 @@ data: [DONE]
 	}
 }
 
+func TestRunDeclarativeAgentTaskParsesSSEWithJSONContentType(t *testing.T) {
+	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"content":"兼容网关"}}]}
+
+data: [DONE]
+
+`))
+	}))
+	defer server.Close()
+
+	result, err := runDeclarativeAgentTask(context.Background(), canvasGenerationInput{
+		Config: providerConfig{BaseURL: server.URL, APIKey: "key", Model: "deepseek-v4-flash", InterfaceType: string(model.ChannelInterfaceChatCompletion)},
+		AgentRequests: &agentToolRequests{ChatCompletion: map[string]interface{}{
+			"messages": []interface{}{map[string]interface{}{"role": "user", "content": "测试"}},
+			"stream":   true,
+		}},
+	}, declarativeAgentTestAdapter{})
+	if err != nil {
+		t.Fatalf("runDeclarativeAgentTask() error = %v", err)
+	}
+	if result["text"] != "兼容网关" {
+		t.Fatalf("text = %v", result["text"])
+	}
+}
+
 func TestRunDeclarativeAgentTaskStopsAtDoneWithoutEOF(t *testing.T) {
 	t.Setenv("CANVAS_ALLOW_PRIVATE_UPSTREAMS", "true")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

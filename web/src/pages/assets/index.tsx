@@ -1168,7 +1168,7 @@ function AssetCard({
             <AssetCover asset={asset} selected={selected} isTrash={isTrash} onSelect={onSelect} onOpen={onOpen} menuItems={menuItems} />
             <button type="button" className="assets-card-body block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--workspace-accent)]" onClick={onOpen}>
                 <div className="assets-card-heading flex min-w-0 justify-between gap-2">
-                    <h2 className="assets-card-title truncate font-semibold text-foreground" title={asset.title}>
+                    <h2 className="assets-card-title library-card-title truncate text-foreground" title={asset.title}>
                         {asset.title}
                     </h2>
                     <span className="assets-card-date shrink-0 tabular-nums text-foreground/38">{formatAssetTime(asset.updatedAt)}</span>

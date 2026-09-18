@@ -17,6 +17,13 @@ export default defineConfig({
         "import.meta.env.VITE_APP_VERSION": JSON.stringify(appVersion),
     },
     server: {
+        watch: process.env.VITE_USE_POLLING === "true"
+            ? {
+                usePolling: true,
+                interval: 500,
+                ignored: ["**/node_modules/**", "**/dist/**", "**/.git/**", "**/.local/**"],
+            }
+            : undefined,
         proxy: {
             "/api": {
                 target: apiProxyTarget,

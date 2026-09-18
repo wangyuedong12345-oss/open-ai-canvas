@@ -143,7 +143,14 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		if err != nil {
 			return nil, err
 		}
-		if strings.Contains(strings.ToLower(mimeType), "event-stream") {
+		if isEventStreamResponse(mimeType, data) {
+			// Some OpenAI-compatible gateways preserve the SSE body but rewrite
+			// Content-Type to application/json. The streaming parser ignored the
+			// chunks in that case, so replay the buffered body with the canonical
+			// SSE MIME before flushing it.
+			if !strings.Contains(strings.ToLower(mimeType), "event-stream") {
+				parser.consume("text/event-stream", data)
+			}
 			parser.flush()
 			return parser.result()
 		}
@@ -169,6 +176,14 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		return nil, err
 	}
 	return protocolAgentResult(parsed)
+}
+
+func isEventStreamResponse(mimeType string, data []byte) bool {
+	if strings.Contains(strings.ToLower(mimeType), "event-stream") {
+		return true
+	}
+	trimmed := bytes.TrimSpace(data)
+	return bytes.HasPrefix(trimmed, []byte("data:")) || bytes.HasPrefix(trimmed, []byte("event:"))
 }
 
 func claudeAgentBody(request map[string]interface{}) map[string]interface{} {

@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { useUserStore, type FeatureAvailability } from "@/stores/use-user-store";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { WorkspaceSidebarCheckin } from "./workspace-sidebar-checkin";
+import { WorkspaceSidebarStorageMeter } from "./workspace-sidebar-storage-meter";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -289,13 +291,17 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             </div>
             </LayoutGroup>
 
-            {footer.length ? <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                <div className="flex flex-col gap-0.5">
+            <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
+                <div className={cn("app-workspace-sidebar-account", collapsed && "is-collapsed")}>
+                    <WorkspaceSidebarStorageMeter collapsed={collapsed} />
+                    <WorkspaceSidebarCheckin collapsed={collapsed} />
+                </div>
+                {footer.length ? <div className="mt-2 flex flex-col gap-0.5">
                     {footer.map((item) => (
                         <NavItem key={item.id} item={item} activeId={activeId} onSelect={onNavigate} onOpenSearch={onOpenSearch} onLogout={() => void handleLogout()} collapsed={collapsed} />
                     ))}
-                </div>
-            </div> : null}
+                </div> : null}
+            </div>
         </div>
     );
 }

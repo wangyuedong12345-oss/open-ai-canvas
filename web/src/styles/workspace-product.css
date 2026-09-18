@@ -98,7 +98,7 @@
 .app-product-workspace .skill-library-card.product-collection-card { min-height: 220px; padding: var(--space-4); }
 .app-product-workspace .skill-library-card .skill-card-top { align-items: center; gap: var(--space-3); }
 .app-product-workspace .skill-library-card .skill-card-icon { width: 36px; height: 36px; flex-shrink: 0; margin: 0; border: 0; background: color-mix(in srgb, var(--category-accent, var(--user-ink-muted)) 12%, var(--user-surface)); color: var(--category-accent, var(--user-ink-muted)); }
-.app-product-workspace .skill-library-card h3 { margin: 0; font-size: 14px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.app-product-workspace .skill-library-card .library-card-title { margin: 0; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .app-product-workspace .skill-library-card .skill-card-description { margin-top: var(--space-3); }
 .app-product-workspace .skill-library-card .skill-card-description p { margin: 0; font-size: 13px; line-height: 1.7; -webkit-line-clamp: 3; }
 .asset-collection-date, .asset-collection-source { color: var(--user-ink-soft); font-size: var(--fs-caption); }

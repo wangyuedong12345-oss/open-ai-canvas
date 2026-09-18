@@ -73,9 +73,37 @@ func runProtocolAdapterTaskWithPolicy(ctx context.Context, input canvasGeneratio
 		if err != nil {
 			return nil, err
 		}
-		body, err := executeProtocolRequest(withProviderRequestKind(ctx, "create"), input.Config, spec)
-		if err != nil {
-			return nil, err
+		createCtx := withProviderRequestKind(ctx, "create")
+		var body []byte
+		var mimeType string
+		if input.Mode == "text" {
+			parser := newStreamingAgentParser(agentStreamProtocol(input.Config.InterfaceType), input.OnTextDelta)
+			parser.emitReasoning = input.OnReasoningDelta
+			streamRequested := protocolBodyObject(spec.Body)["stream"] == true
+			if streamRequested {
+				body, mimeType, err = executeProtocolBinaryRequestWithConsumerUntil(createCtx, input.Config, spec, parser.consume, parser.doneReading)
+			} else {
+				body, mimeType, err = executeProtocolBinaryRequest(createCtx, input.Config, spec)
+			}
+			if err != nil {
+				return nil, err
+			}
+			if isEventStreamResponse(mimeType, body) {
+				if !strings.Contains(strings.ToLower(mimeType), "event-stream") || !streamRequested {
+					parser.consume("text/event-stream", body)
+				}
+				parser.flush()
+				parsed, err := parser.result()
+				if err != nil {
+					return nil, err
+				}
+				return providerTextTaskResult(providerTextResult{Text: stringField(parsed, "text"), Reasoning: stringField(parsed, "reasoning")}), nil
+			}
+		} else {
+			body, err = executeProtocolRequest(createCtx, input.Config, spec)
+			if err != nil {
+				return nil, err
+			}
 		}
 		created, err = adapter.ParseCreate(ctx, body)
 		if err != nil {
@@ -238,9 +266,21 @@ func protocolRequestFromInput(input canvasGenerationInput) protocol.GenerationRe
 	if configured, ok := input.Metadata["providerOptions"].(map[string]any); ok {
 		for namespace, raw := range configured {
 			if options, ok := raw.(map[string]any); ok {
-				request.ProviderOptions[strings.TrimSpace(namespace)] = options
+				cloned := make(map[string]any, len(options))
+				for key, value := range options {
+					cloned[key] = value
+				}
+				request.ProviderOptions[strings.TrimSpace(namespace)] = cloned
 			}
 		}
+	}
+	if input.Mode == "text" && strings.TrimSpace(input.Config.InterfaceType) != "" {
+		options := request.ProviderOptions[input.Config.InterfaceType]
+		if options == nil {
+			options = make(map[string]any)
+			request.ProviderOptions[input.Config.InterfaceType] = options
+		}
+		options["stream"] = input.StreamText
 	}
 	return request
 }

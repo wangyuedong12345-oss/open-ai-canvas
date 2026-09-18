@@ -301,7 +301,7 @@ function SkillCard({ skill, categories, loading, style, onOpen, onAdd, onLike, o
             <div className="skill-card-top">
                 <span className="library-icon-tile skill-card-icon" aria-hidden="true"><CategoryIcon /></span>
                 <button type="button" className="skill-card-title-button" onClick={onOpen}>
-                    <h3>{skill.skillName}</h3>
+                    <h3 className="library-card-title">{skill.skillName}</h3>
                 </button>
                 {skill.isOwner ? (
                     <Dropdown
