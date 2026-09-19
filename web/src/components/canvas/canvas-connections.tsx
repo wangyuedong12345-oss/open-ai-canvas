@@ -7,6 +7,8 @@ import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight 
 import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "@/types/canvas";
 
+const CONNECTION_COMET_LENGTH = 80;
+
 export const ConnectionPath = React.memo(function ConnectionPath({
     connection,
     from,
@@ -36,6 +38,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     const emphasized = active || hovered;
     const showVisual = !hideVisual && (visualMode === "full" || emphasized);
     const showBaseVisual = showVisual && visualMode === "full";
+    const curveLength = showVisual && emphasized ? connectionCurveLength(startX, startY, endX, endY) : 0;
+    const cometLength = Math.min(CONNECTION_COMET_LENGTH, curveLength * 0.85);
+    const normalizedCometLength = curveLength ? 100 * cometLength / curveLength : 0;
 
     return (
         <g>
@@ -86,14 +91,14 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 <circle cx={endX} cy={endY} r="2.5" fill={theme.node.muted} fillOpacity="0.72" vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
             {showVisual && emphasized ? <>
-                {/* Shorter dashes lead by half the length difference, so all layers share one white center. */}
+                {/* Keep the light trail the same length across curves; center the shorter layers. */}
                 {[
-                    { length: 16, width: 3, opacity: 0.16, blur: 2 },
-                    { length: 14, width: 1.5, opacity: 0.12, blur: 0 },
-                    { length: 10, width: 1.5, opacity: 0.2, blur: 0 },
-                    { length: 6, width: 1.6, opacity: 0.3, blur: 0 },
-                    { length: 2, width: 1.7, opacity: 0.65, blur: 0 },
-                ].map(({ length, width, opacity, blur }, index) => <path
+                    { fraction: 1, width: 3, opacity: 0.16, blur: 2 },
+                    { fraction: 0.875, width: 1.5, opacity: 0.12, blur: 0 },
+                    { fraction: 0.625, width: 1.5, opacity: 0.2, blur: 0 },
+                    { fraction: 0.375, width: 1.6, opacity: 0.3, blur: 0 },
+                    { fraction: 0.125, width: 1.7, opacity: 0.65, blur: 0 },
+                ].map(({ fraction, width, opacity, blur }, index) => <path
                     key={index}
                     className="canvas-connection-comet"
                     d={pathD}
@@ -102,10 +107,10 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                     strokeWidth={width}
                     strokeOpacity={opacity}
                     vectorEffect="non-scaling-stroke"
-                    strokeDasharray={`${length} ${100 - length}`}
+                    strokeDasharray={`${normalizedCometLength * fraction} ${100 - normalizedCometLength * fraction}`}
                     fill="none"
                     strokeLinecap="butt"
-                    style={{ pointerEvents: "none", ...(blur ? { filter: `blur(${blur}px)` } : {}), animationDelay: `${-((16 - length) / 2) * 0.021}s` }}
+                    style={{ pointerEvents: "none", ...(blur ? { filter: `blur(${blur}px)` } : {}), animationDelay: `${-(normalizedCometLength * (1 - fraction) / 2) * 0.021}s` }}
                 />)}
             </> : null}
         </g>
@@ -120,6 +125,23 @@ export function canvasConnectionPath(connection: CanvasConnection, from: CanvasN
     const dx = Math.abs(endX - startX);
     const curvature = Math.max(dx * 0.5, 50);
     return { pathD: `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
+}
+
+function connectionCurveLength(startX: number, startY: number, endX: number, endY: number) {
+    const curvature = Math.max(Math.abs(endX - startX) * 0.5, 50);
+    let previousX = startX;
+    let previousY = startY;
+    let length = 0;
+    for (let step = 1; step <= 24; step++) {
+        const t = step / 24;
+        const u = 1 - t;
+        const x = u * u * u * startX + 3 * u * u * t * (startX + curvature) + 3 * u * t * t * (endX - curvature) + t * t * t * endX;
+        const y = u * u * u * startY + 3 * u * u * t * startY + 3 * u * t * t * endY + t * t * t * endY;
+        length += Math.hypot(x - previousX, y - previousY);
+        previousX = x;
+        previousY = y;
+    }
+    return Math.max(length, 1);
 }
 
 export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, target?: CanvasNodeData, nodeScrollTop = 0) {
