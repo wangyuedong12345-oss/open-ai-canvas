@@ -1,12 +1,9 @@
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
-import { bootstrapAppearance } from "@/services/appearance-bootstrap";
-import { isIsolatedDirectorRepro } from "@/lib/dev-repro";
+import { bootWorkspace } from "@/lib/workspace-boot";
 
-// The public film entry checks its availability independently of workspace bootstrap.
-if (/^\/welcome\/?$/.test(window.location.pathname)) void import("./welcome-application");
-else {
-    // The backend-free DEV lab must not make requests before AppProviders isolates it.
-    const appearanceReady = isIsolatedDirectorRepro(import.meta.env.DEV, window.location.pathname) ? Promise.resolve() : bootstrapAppearance();
-    void appearanceReady.finally(() => import("./application"));
-}
+// 根路径与 /welcome 都由欢迎页接管：它是独立入口，自行检查可用开关，
+// 关闭时回落到工作台（/welcome 则跳回根路径）。
+const pathname = window.location.pathname;
+if (pathname === "/" || /^\/welcome\/?$/.test(pathname)) void import("./welcome-application");
+else bootWorkspace();

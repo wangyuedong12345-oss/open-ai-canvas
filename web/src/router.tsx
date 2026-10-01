@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation } from "react-router";
 
 import { RequireAuth } from "@/components/auth/require-auth";
@@ -61,6 +61,14 @@ function deferred(element: ReactNode) {
 
 function fullScreenDeferred(element: ReactNode) {
     return <Suspense fallback={<FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />}>{element}</Suspense>;
+}
+
+/** 欢迎页中继：欢迎页是 main.tsx 层的独立入口，这里只负责整页跳转。 */
+function WelcomeRelay() {
+    useEffect(() => {
+        window.location.replace("/welcome");
+    }, []);
+    return <FullScreenLoader label="正在打开欢迎页" detail="即将前往首页" />;
 }
 
 function AuthenticatedWorkspaceLayout() {
@@ -217,5 +225,8 @@ export const router = createBrowserRouter([
             },
         ],
     },
+    // 欢迎页是 main.tsx 层的独立入口，不在本路由表内；
+    // 若 SPA 内部导航到 /welcome，整页跳转让入口分发重新执行。
+    { path: "welcome", element: fullScreenDeferred(<WelcomeRelay />) },
     { path: "*", element: fullScreenDeferred(<NotFound />) },
 ]);
