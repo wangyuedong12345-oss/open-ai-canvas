@@ -1,7 +1,7 @@
 import { defaultImageCapabilityConfig, modelCapabilityConfigFor, normalizeImageValue, normalizeVideoValue, STANDARD_IMAGE_SIZE_VALUES, videoDurationAllowed, type ImageCapabilityConfig } from "@/lib/model-capabilities";
 import { videoResolutionComparisonKey } from "@/lib/video-generation-options";
 import { imageSizePresets } from "@/lib/image-size-presets";
-import { modelOptionName, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { modelOptionName, PUBLIC_MODEL_CATALOG_ID, resolveModelChannel, selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
 
 export type ModelInputSummary = {
     textCount: number;
@@ -32,12 +32,68 @@ export type ModelReferenceLimits = {
     maxAudios: number;
 };
 
+/**
+ * 普通音频模型只接受文本或音色 ID。豆包音频生成可以连接最多 3 段参考音频，
+ * 或 1 张参考图片，两者不能同时使用。
+ */
+export function audioReferenceCapacity(config: AiConfig, model: string) {
+    return audioProtocol(config, model) === "doubao-streaming-tts" ? 3 : 0;
+}
+
+export function isDoubaoAudioModel(config: AiConfig, model: string) {
+    if (!String(model || "").trim()) return false;
+    if (audioProtocol(config, model) === "doubao-streaming-tts") return true;
+    // seed-audio-1.0 与 seed-audio-1.0-multilingual 共用同一套 references 合同。
+    return modelOptionName(model).toLowerCase().startsWith("seed-audio");
+}
+
+export function audioModelForConnection(config: AiConfig, explicit = "") {
+    const selected = String(explicit || "").trim();
+    if (selected) return selected;
+    if (String(config.audioModel || "").trim()) return config.audioModel;
+    return (config.audioModels || []).find((item) => isDoubaoAudioModel(config, item)) || "";
+}
+
+/**
+ * 从连线新建音频节点时选模型：默认音频模型接得住当前输入就用它，
+ * 否则改用第一个接得住的音频模型（例如图片连过来时改用豆包音频）。
+ */
+export function audioModelForConnectionInput(config: AiConfig, input: ModelInputSummary) {
+    const preferred = audioModelForConnection(config);
+    const requirements: ModelRequirements = { capability: "audio", input };
+    if (preferred && !modelCompatibilityError(config, preferred, requirements)) return preferred;
+    const candidates = config.audioModels?.length ? config.audioModels : selectableModelsByCapability(config, "audio");
+    return candidates.find((model) => !modelCompatibilityError(config, model, requirements)) || preferred;
+}
+
+export function doubaoAudioInputError(input: ModelInputSummary) {
+    if (input.videoCount > 0) return "音频生成不能连接参考视频";
+    if (input.imageCount > 0 && input.audioCount > 0) return "参考图片和参考音频不能同时连接";
+    if (input.imageCount > 1) return "最多连接 1 张参考图片";
+    if (input.audioCount > 3) return "最多连接 3 段参考音频";
+    return "";
+}
+
+function audioProtocol(config: AiConfig, model: string) {
+    const channel = resolveModelChannel(config, model);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(model));
+    return cost?.protocol || channel.interfaceType;
+}
+
+export function isDirectSystemModel(config: AiConfig, value: string) {
+    if (!value) return false;
+    const channel = resolveModelChannel(config, value);
+    const cost = channel.modelCosts?.find((item) => item.model === modelOptionName(value));
+    return channel.scope === "system" && channel.id !== PUBLIC_MODEL_CATALOG_ID && !cost?.logicalModelId;
+}
+
 export function groupModelsByDisplayName(config: AiConfig, models: string[]): DisplayModelGroup[] {
     const groups = new Map<string, DisplayModelGroup>();
     models.forEach((model) => {
         const channel = resolveModelChannel(config, model);
         const label = configuredModelDisplayName(config, model);
-        const key = `${channel.id}\u0000${label.toLocaleLowerCase()}`;
+        // 平台直连模型是独立的渠道 SKU；同名只用于菜单展示，不能合并能力或自动改选。
+        const key = isDirectSystemModel(config, model) ? JSON.stringify([channel.id, modelOptionName(model)]) : `${channel.id}\u0000${label.toLocaleLowerCase()}`;
         const current = groups.get(key);
         if (current) current.models.push(model);
         else groups.set(key, { key, label, models: [model] });
@@ -102,8 +158,14 @@ export function modelCompatibilityError(config: AiConfig, model: string, require
         return "";
     }
 
+    if (isDoubaoAudioModel(config, model)) return doubaoAudioInputError(input);
+    if (input.imageCount > 0 || input.videoCount > 0) return "音频模型不能连接参考图片或参考视频";
     if (input.characterCount > 1) return "角色配音一次只能引用一个角色卡";
-    return input.imageCount > 0 || input.videoCount > 0 || input.audioCount > 0 ? "音频模型只接受文本或单个角色卡输入" : "";
+    const maxAudios = audioReferenceCapacity(config, model);
+    if (input.audioCount > maxAudios) {
+        return maxAudios > 0 ? `当前音频模型最多支持 ${maxAudios} 个参考音频` : "当前音频模型不支持参考音频";
+    }
+    return "";
 }
 
 export function modelPromptLengthError(config: AiConfig, model: string, capability: ModelCapability, prompt: string) {
@@ -126,7 +188,7 @@ export function modelRequestOptions(config: AiConfig, capability: ModelCapabilit
         case "video":
             return { size: config.size, videoSeconds: Number(config.videoSeconds), vquality: config.vquality, videoGenerateAudio: config.videoGenerateAudio === "true", videoWatermark: config.videoWatermark === "true" };
         case "audio":
-            return { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed) };
+            return { audioVoice: config.audioVoice, audioFormat: config.audioFormat, audioSpeed: Number(config.audioSpeed), audioEmotionControlMethod: config.audioEmotionControlMethod, audioEmotionRandom: config.audioEmotionRandom === "true", audioEmotionHappy: Number(config.audioEmotionHappy), audioEmotionAngry: Number(config.audioEmotionAngry), audioEmotionSad: Number(config.audioEmotionSad), audioEmotionAfraid: Number(config.audioEmotionAfraid), audioEmotionDisgusted: Number(config.audioEmotionDisgusted), audioEmotionMelancholic: Number(config.audioEmotionMelancholic), audioEmotionSurprised: Number(config.audioEmotionSurprised), audioEmotionCalm: Number(config.audioEmotionCalm) };
         default:
             return {};
     }

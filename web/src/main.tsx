@@ -1,6 +1,9 @@
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
+import { installChunkRecovery } from "@/lib/chunk-recovery";
 import { bootWorkspace } from "@/lib/workspace-boot";
+
+installChunkRecovery();
 
 // 根路径与 /welcome 都由欢迎页接管：它是独立入口，自行检查可用开关，
 // 关闭时回落到工作台（/welcome 则跳回根路径）。

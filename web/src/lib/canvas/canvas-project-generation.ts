@@ -10,6 +10,7 @@ import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import { modelCapabilityConfigFor, workflowFieldCurrentValue, workflowFieldHasStoredValue, workflowFieldKey, workflowFieldRandomKey, workflowFieldSubmissionValue, workflowOutputSizeValue, workflowVideoFieldsFromJson } from "@/lib/model-capabilities";
 import { modelRequestOptions, resolveCompatibleModel, resolveModelGenerationDefaults, resolveVideoOperation, type ModelGenerationDefaults, type ModelRequirements } from "@/lib/model-selection";
 import { imageMetadata } from "@/lib/canvas/canvas-generation-task-sync";
+import { producedModelCandidateForGeneration } from "@/lib/canvas/produced-model";
 import { ensureMediaNodeMinimumSize } from "@/lib/canvas/canvas-node-size";
 import { interruptFileUpload } from "@/lib/canvas/canvas-file-upload";
 import { isCanvasWorkflowProvider, resolveCanvasWorkflowProvider } from "@/lib/canvas/canvas-workflow";
@@ -158,6 +159,8 @@ export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata
         taskStatus: task.status,
         taskProgress: progress,
         taskStage: task.stage,
+        taskMediaStage: task.mediaStage,
+        taskCanRecoverMedia: task.canRecoverMedia,
         taskProvider: task.provider,
         taskStartedAt: task.startedAt,
         taskCompletedAt: task.completedAt,
@@ -170,34 +173,7 @@ export function generationTaskMetadata(task: GenerationTask): CanvasNodeMetadata
     };
 }
 
-// 失败节点再次提交前必须移除旧任务绑定，否则批次调度会把它误判为仍在处理。
-export function resetGenerationTaskMetadata(metadata: CanvasNodeMetadata | undefined, status: CanvasNodeMetadata["status"] = "idle"): CanvasNodeMetadata {
-    const next = {
-        ...(metadata || {}),
-        status,
-        errorDetails: undefined,
-        generationErrorCode: undefined,
-        resourceReloadAvailable: undefined,
-        failedPromptFingerprint: undefined,
-    };
-    delete next.taskId;
-    delete next.taskClientOperationId;
-    delete next.retryOf;
-    delete next.attemptGroupId;
-    delete next.taskStatus;
-    delete next.taskProgress;
-    delete next.taskStage;
-    delete next.taskProvider;
-    delete next.taskStartedAt;
-    delete next.taskCompletedAt;
-    delete next.taskDurationMs;
-    delete next.taskErrorCode;
-    delete next.taskOfficialStatus;
-    delete next.taskReceiptRecorded;
-    delete next.taskCreatedAt;
-    delete next.taskUpdatedAt;
-    return next;
-}
+export { resetGenerationTaskMetadata } from "@/lib/canvas/canvas-task-state";
 
 function normalizeTaskProgress(progress: number | undefined, status: GenerationTask["status"]) {
     if (typeof progress === "number" && Number.isFinite(progress)) return Math.max(0, Math.min(100, Math.round(progress)));
@@ -224,6 +200,7 @@ export function buildImageGenerationMetadata(type: CanvasImageGenerationType, co
         ...generationWorkflowMetadata(config),
         generationType: type,
         model: config.model,
+        producedModelCandidate: producedModelCandidateForGeneration(config),
         size: config.size,
         quality: config.quality,
         transparentBackground: config.transparentBackground,
@@ -260,10 +237,23 @@ export function buildAudioGenerationMetadata(config: AiConfig): CanvasNodeMetada
     return {
         ...generationWorkflowMetadata(config),
         model: config.model,
+        producedModelCandidate: producedModelCandidateForGeneration(config),
         audioVoice: config.audioVoice,
         audioFormat: config.audioFormat,
         audioSpeed: config.audioSpeed,
+        audioLanguage: config.audioLanguage,
+        audioDialect: config.audioDialect,
         audioInstructions: config.audioInstructions,
+        audioEmotionControlMethod: config.audioEmotionControlMethod,
+        audioEmotionRandom: config.audioEmotionRandom,
+        audioEmotionHappy: config.audioEmotionHappy,
+        audioEmotionAngry: config.audioEmotionAngry,
+        audioEmotionSad: config.audioEmotionSad,
+        audioEmotionAfraid: config.audioEmotionAfraid,
+        audioEmotionDisgusted: config.audioEmotionDisgusted,
+        audioEmotionMelancholic: config.audioEmotionMelancholic,
+        audioEmotionSurprised: config.audioEmotionSurprised,
+        audioEmotionCalm: config.audioEmotionCalm,
     };
 }
 
@@ -459,6 +449,8 @@ export function buildGenerationConfig(config: AiConfig, node: CanvasNodeData | u
         audioVoice: node?.metadata?.audioVoice ?? config.audioVoice ?? defaultConfig.audioVoice,
         audioFormat: node?.metadata?.audioFormat ?? config.audioFormat ?? defaultConfig.audioFormat,
         audioSpeed: node?.metadata?.audioSpeed ?? config.audioSpeed ?? defaultConfig.audioSpeed,
+        audioLanguage: node?.metadata?.audioLanguage ?? config.audioLanguage ?? defaultConfig.audioLanguage,
+        audioDialect: node?.metadata?.audioDialect ?? config.audioDialect ?? defaultConfig.audioDialect,
         audioInstructions: node?.metadata?.audioInstructions ?? config.audioInstructions ?? defaultConfig.audioInstructions,
         count: String(node?.metadata?.count ?? (mode === "image" ? config.canvasImageCount || config.count || defaultConfig.count : config.count || defaultConfig.count)),
     };

@@ -2,6 +2,7 @@ import type { ModelCapabilityChoice } from "@/components/model-protocol-picker";
 import { defaultModelCapabilityConfig, normalizeModelCapabilityConfig, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { modelProtocolSupportsTokenBilling, type ModelProtocolDefinition } from "@/lib/model-protocols";
 import type { ChannelModel } from "@/services/api/wallet";
+import type { ModelTag } from "@/lib/model-tags";
 import { defaultPriceTier, legacyPriceTierToForm, priceTierToForm, type PriceTierFormValues } from "./channel-model-price-tier-form";
 
 export type ChannelModelFormValues = {
@@ -9,6 +10,7 @@ export type ChannelModelFormValues = {
     providerModelKey?: string;
     displayName?: string;
     channelLabel?: string;
+    tags: ModelTag[];
     description?: string;
     icon?: string;
     capability: ModelCapabilityChoice;
@@ -33,6 +35,7 @@ export function initialChannelModelValues(item: ChannelModel | null, protocols: 
         providerModelKey: upstreamModel,
         displayName: item?.displayName || "",
         channelLabel: item?.channelLabel || "",
+        tags: item?.tags?.map((tag) => ({ ...tag })) || [],
         description: item?.description || "",
         icon: item?.icon || "",
         capability,
@@ -85,7 +88,7 @@ export function validateChannelModelPrices(values: Pick<ChannelModelFormValues, 
             throw new Error(`价格档 ${index + 1}：${text}`);
         };
         if (!["fixed_request", "per_second", "token"].includes(tier.billingMode)) fail("请选择计费方式");
-        if (tier.billingMode === "per_second" && capability !== "video") fail("按秒计费仅支持视频，请重新选择计费方式并核对价格");
+        if (tier.billingMode === "per_second" && capability !== "video" && capability !== "audio") fail("按秒计费仅支持视频或音频，请重新选择计费方式并核对价格");
         if (tier.billingMode === "token" && !modelProtocolSupportsTokenBilling(capability, protocol)) fail("当前模型能力不支持 Token 计费，请重新选择计费方式并核对价格");
         if (tier.matchMode === "advanced") {
             if (tier.operation && tier.operation !== "*" && !operations[capability]?.includes(tier.operation)) fail("生成方式与模型能力不匹配");

@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { moduleGroupSource } from "./helpers/module-group-source";
 
 describe("asset library filters", () => {
     test("keeps type and business filters in the toolbar while folders stay in the left nav", () => {
-        const page = readFileSync(resolve(import.meta.dir, "../src/pages/assets/index.tsx"), "utf8");
+        const page = moduleGroupSource("pages/assets/index.tsx");
         const css = readFileSync(resolve(import.meta.dir, "../src/styles/workspace-product.css"), "utf8");
         expect(page).toContain('className="assets-collection-layout"');
         expect(page).toContain('aria-label="素材分类"');

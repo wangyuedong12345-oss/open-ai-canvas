@@ -35,9 +35,8 @@ type AssetProjectRelationRow struct {
 func (r *Repository) UserAssetsPage(userID string, page int, pageSize int, filter UserAssetPageFilter) ([]model.Asset, int64, error) {
 	var assets []model.Asset
 	var total int64
-	// 素材库页面只展示媒体与文本素材；entity 角色卡由项目资产页管理。列表与 facets 必须同口径排除，
-	// 否则 facets 会计入 entity，前端出现“全部计数 30 但列表为空”的矛盾。
-	query := userAssetFilteredQuery(r.db.Model(&model.Asset{}).Where("user_id = ? AND kind <> ?", userID, "entity"), filter, true)
+	// 角色卡是用户素材的一种，和图片、音频一起出现在素材库；列表与 facets 使用同一查询口径。
+	query := userAssetFilteredQuery(r.db.Model(&model.Asset{}).Where("user_id = ?", userID), filter, true)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -60,9 +59,11 @@ func (r *Repository) AssetProjectRelationsByIDs(userID string, assetIDs []string
 	return rows, err
 }
 
+// UserAssetFacets 与列表使用同一筛选口径（含搜索词），保证 facets 计数与列表内容一致；
+// 角色卡（entity）自 v1.6.0 起也是素材库成员，这里不再按类型排除。
 func (r *Repository) UserAssetFacets(userID string, filter UserAssetPageFilter) ([]UserAssetFacetRow, []UserAssetFacetRow, []UserAssetFacetRow, error) {
 	base := func(facetFilter UserAssetPageFilter) *gorm.DB {
-		return userAssetFilteredQuery(r.db.Model(&model.Asset{}).Where("user_id = ? AND kind <> ?", userID, "entity"), facetFilter, true)
+		return userAssetFilteredQuery(r.db.Model(&model.Asset{}).Where("user_id = ?", userID), facetFilter, true)
 	}
 	var kindRows []UserAssetFacetRow
 	kindFilter := filter
@@ -88,7 +89,6 @@ func (r *Repository) UserAssetFacets(userID string, filter UserAssetPageFilter) 
 }
 
 func userAssetFilteredQuery(query *gorm.DB, filter UserAssetPageFilter, includeSearch bool) *gorm.DB {
-	query = query.Where("kind <> ?", "entity")
 	if value := strings.TrimSpace(filter.Kind); value != "" {
 		query = query.Where("kind = ?", value)
 	}

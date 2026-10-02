@@ -128,7 +128,17 @@ func (s *Service) UpsertUserAsset(userID string, raw json.RawMessage) (UserDataS
 
 func (s *Service) DeleteUserAsset(userID string, id string) error {
 	return s.host.WithStorageLock(func() error {
-		return s.host.DeleteUserAssetWithResources(userID, id)
+		return s.host.DeleteUserAssetWithResources(userID, id, false)
+	})
+}
+
+func (s *Service) PurgeUserAsset(userID string, id string) error {
+	return s.PurgeUserAssets(userID, []string{id})
+}
+
+func (s *Service) PurgeUserAssets(userID string, ids []string) error {
+	return s.host.WithStorageLock(func() error {
+		return s.host.PurgeUserAssetsWithResources(userID, ids)
 	})
 }
 
@@ -208,6 +218,10 @@ func (s *Service) UserCanvasProjectSummaries(userID string) ([]UserDataSummary, 
 	return result, nil
 }
 
+func (s *Service) UserCanvasProjectMetadata(userID string, id string) (*model.CanvasProject, error) {
+	return s.repo.CanvasProjectMetadataForUser(userID, id)
+}
+
 func (s *Service) UserCanvasProject(userID string, id string) (json.RawMessage, error) {
 	project, err := s.repo.CanvasProjectForUser(userID, id)
 	if err != nil {
@@ -283,8 +297,9 @@ func (s *Service) upsertUserCanvasProjectWithHistory(userID string, raw json.Raw
 			if errors.Is(err, repository.ErrCanvasRevisionConflict) {
 				return canvasRevisionConflict()
 			}
-			if errors.Is(err, repository.ErrCanvasHistoryResourceMissing) {
-				return kernel.NewAppError(http.StatusConflict, "画布引用的素材已变化，当前内容未被覆盖，请保留草稿并重新加载")
+			var missing *repository.CanvasHistoryResourceMissingError
+			if errors.As(err, &missing) {
+				return canvasResourcesMissingError(missing.References)
 			}
 			return err
 		}

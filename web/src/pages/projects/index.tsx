@@ -3,7 +3,7 @@ import { CachedResourceImage } from "@/components/cached-resource-image";
 import { MediaPlaceholder } from "@/components/ui/product/media-placeholder";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { App, Button, Dropdown, Form, Input, Modal, Select } from "antd";
+import { App, Button, Dropdown, Form, Input, Modal } from "antd";
 import { Archive, ArrowRight, BookOpenText, FileText, FolderKanban, Image as ImageIcon, Images, LayoutGrid, MoreHorizontal, Palette, Pencil, Plus, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 
@@ -21,6 +21,7 @@ import { createProject, deleteProject, importProjectUnits, listProjects, updateP
 import { modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
 
 import { sourceTypeLabel } from "./detail/shared";
+import { Select } from "@/components/ui/base/select";
 
 type ProjectForm = { name: string; aspectRatio: string; sourceType: string };
 

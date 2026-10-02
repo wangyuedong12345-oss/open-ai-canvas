@@ -120,6 +120,22 @@ export function storyboardRowsOutputContract(requirement: string) {
     ].join("\n");
 }
 
+// 分镜文本任务实际发出的 prompt：技能上下文只描述工作流、不约束输出结构，画布节点和章节分镜又都没有
+// metadata.promptTemplateOperation（后端只在有该字段时编译服务端模板），所以契约必须由调用方显式拼上，
+// 否则模型按自然语言习惯返回 Markdown 表格或直接续写正文，解析阶段拿不到 rows。
+// 镜头数与每镜时长只能写进契约文本：后端 canvasGenerationInput 不读 input.shotCount / shotDurationSeconds，
+// 仅放进 input 时节点上的「N 镜」「每镜 N 秒」对模型不可见。
+export function withStoryboardOutputContract(prompt: string, options: { shotCount?: number; shotDurationSeconds?: number } = {}) {
+    const shotCount = Math.trunc(Number(options.shotCount) || 0);
+    const shotDurationSeconds = Math.trunc(Number(options.shotDurationSeconds) || 0);
+    const requirement = [
+        shotCount > 0 ? `全片共 ${shotCount} 个镜头` : "",
+        shotDurationSeconds > 0 ? `每镜约 ${shotDurationSeconds} 秒，durationSeconds 填写该值` : "",
+        "每个镜头必须能独立用于生成首帧图片和镜头视频。",
+    ].filter(Boolean).join("；");
+    return [prompt, storyboardRowsOutputContract(requirement)].join("\n\n");
+}
+
 // 文本任务的 result_json 外层是 {mode, reasoning, text} 包装，分镜表在 text 字段的内层 JSON 字符串里；
 // 历史模板路径可能直接落 {title, rows}。两种结构都要能解析，内层再做代码块剥离与首尾大括号截取兜底，
 // 模型偶发违反契约（包 ```json 或混入解释文字）时仍能取出分镜表。
@@ -139,25 +155,72 @@ function parseStoryboardRowsPayload(raw: string): { title?: string; rows?: Array
             }
         }
     }
+    if (parsed.text && typeof parsed.text === "object") {
+        try {
+            const nested = parseStoryboardRowsPayload(JSON.stringify(parsed.text));
+            if (Array.isArray(nested.rows)) return nested;
+        } catch {
+            // 对象形式的 text 不是分镜载荷时，交由统一缺行校验报错。
+        }
+    }
     return parsed;
+}
+
+function normalizeStoryboardText(value: unknown): string {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (Array.isArray(value)) return value.map(normalizeStoryboardText).filter(Boolean).join("、");
+    if (!value || typeof value !== "object") return "";
+    const record = value as Record<string, unknown>;
+    for (const key of ["text", "content", "value", "description", "name"]) {
+        if (!(key in record)) continue;
+        const nested = normalizeStoryboardText(record[key]);
+        if (nested) return nested;
+    }
+    return "";
+}
+
+function normalizeStoryboardRow(row: Partial<StoryboardRow>): Partial<StoryboardRow> {
+    return {
+        ...row,
+        plotDescription: normalizeStoryboardText(row.plotDescription),
+        dialogue: normalizeStoryboardText(row.dialogue),
+        narrativeIntent: normalizeStoryboardText(row.narrativeIntent),
+        viewerPOV: normalizeStoryboardText(row.viewerPOV),
+        performanceBlocking: normalizeStoryboardText(row.performanceBlocking),
+        shotSize: normalizeStoryboardText(row.shotSize),
+        emotion: normalizeStoryboardText(row.emotion),
+        lightingAndAtmosphere: normalizeStoryboardText(row.lightingAndAtmosphere),
+        audioEffects: normalizeStoryboardText(row.audioEffects),
+        camera: normalizeStoryboardText(row.camera),
+        motion: normalizeStoryboardText(row.motion),
+        timeBeats: normalizeStoryboardText(row.timeBeats),
+        imageGenerationPrompt: normalizeStoryboardText(row.imageGenerationPrompt),
+        videoMotionPrompt: normalizeStoryboardText(row.videoMotionPrompt),
+        continuityOut: normalizeStoryboardText(row.continuityOut),
+        negativePrompt: normalizeStoryboardText(row.negativePrompt),
+    };
 }
 
 export function storyboardRowsFromTask(task: GenerationTask) {
     const result = parseStoryboardRowsPayload(task.resultJson || "{}");
     if (!Array.isArray(result.rows) || !result.rows.length) throw new Error("分镜任务没有返回镜头行");
     return {
-        title: result.title?.trim(),
+        // 旧任务和部分模型会把 title 返回成对象/数组；恢复路径必须只接受字符串，
+        // 否则可选链只能防 undefined，仍会在对象上调用 trim 使整页恢复失败。
+        title: typeof result.title === "string" ? result.title.trim() : undefined,
         rows: result.rows.map((row, index) => {
+            const source = row && typeof row === "object" ? row : {};
             const next = createStoryboardRow(index + 1, {
-                ...row,
+                ...normalizeStoryboardRow(source),
                 id: `shot-${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 6)}`,
                 shotNumber: index + 1,
                 status: "idle",
-                assetBindings: normalizeStoryboardAssetBindings(row.assetBindings),
+                assetBindings: normalizeStoryboardAssetBindings(Array.isArray(source.assetBindings) ? source.assetBindings : undefined),
             });
-            next.characters = Array.isArray(row.characters) ? row.characters : [];
-            next.mustHave = Array.isArray(row.mustHave) ? row.mustHave : [];
-            next.optionalDetails = Array.isArray(row.optionalDetails) ? row.optionalDetails : [];
+            next.characters = Array.isArray(source.characters) ? source.characters : [];
+            next.mustHave = Array.isArray(source.mustHave) ? source.mustHave : [];
+            next.optionalDetails = Array.isArray(source.optionalDetails) ? source.optionalDetails : [];
             return next;
         }),
     };
@@ -178,6 +241,8 @@ const NODE_MODEL_GENERATION_PARAMS: ReadonlyArray<keyof CanvasNodeMetadata> = [
     "audioVoice",
     "audioFormat",
     "audioSpeed",
+    "audioLanguage",
+    "audioDialect",
     "audioInstructions",
 ];
 

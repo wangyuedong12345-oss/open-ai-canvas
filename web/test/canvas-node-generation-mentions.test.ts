@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildNodeGenerationContext } from "../src/components/canvas/canvas-node-generation";
-import { buildCanvasResourceReferences } from "../src/lib/canvas/canvas-resource-references";
+import { buildCanvasResourceReferences, getGenerationResourceNodes, normalizeCanvasNodeMentionTokens } from "../src/lib/canvas/canvas-resource-references";
 import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../src/types/canvas";
 
 function node(id: string, type: CanvasNodeType, content: string): CanvasNodeData {
@@ -28,11 +28,75 @@ function targetNode(): CanvasNodeData {
     };
 }
 
-function connection(fromNodeId: string): CanvasConnection {
-    return { id: `connection-${fromNodeId}`, fromNodeId, toNodeId: "target" };
+function connection(fromNodeId: string, toNodeId = "target"): CanvasConnection {
+    return { id: `connection-${fromNodeId}`, fromNodeId, toNodeId };
 }
 
 describe("canvas node generation position mentions", () => {
+    test("角色卡三视图可解析图片别名，编辑器与生成统一显示角色引用", () => {
+        const target = targetNode();
+        const character = node("character", CanvasNodeType.Text, "");
+        character.metadata = { workflowKind: "character", characterAssetId: "character-asset", characterVersionPolicy: "current" };
+        const nodes = [target, character];
+        const connections = [connection(character.id)];
+        const references = buildCanvasResourceReferences(nodes, connections, target.id);
+        const prompt = "严格参考 @图片1，保持服装一致。";
+        expect(normalizeCanvasNodeMentionTokens(prompt, references)).toBe("严格参考 @角色1，保持服装一致。");
+        const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, []);
+        expect(context.prompt).toBe("严格参考 @角色1，保持服装一致。");
+        expect(context.characterReferences).toEqual([{ nodeId: character.id, assetId: "character-asset", requestedVersionId: undefined }]);
+        expect(() => buildNodeGenerationContext(target.id, nodes, connections, "参考 @图片2", [])).toThrow("@图片2");
+    });
+
+    test("角色卡与普通图片混合时，图片编号不指向角色卡", () => {
+        const target = targetNode();
+        const character = node("character", CanvasNodeType.Text, "");
+        character.metadata = { workflowKind: "character", characterAssetId: "character-asset" };
+        const image = node("scene", CanvasNodeType.Image, "data:image/png;base64,AA==");
+        const nodes = [target, character, image];
+        const connections = [connection(character.id), connection(image.id)];
+        const prompt = "@角色1 站在 @图片1 场景内。";
+        const references = buildCanvasResourceReferences(nodes, connections, target.id);
+        expect(normalizeCanvasNodeMentionTokens(prompt, references)).toBe(prompt);
+        const context = buildNodeGenerationContext(target.id, nodes, connections, prompt, []);
+        expect(context.referenceImages.map((item) => item.id)).toEqual([image.id]);
+        expect(context.characterReferences.map((item) => item.nodeId)).toEqual([character.id]);
+    });
+
+    test("父图无预览时仍可继承输入，显式子图输入优先且去重", () => {
+        const a = node("a", CanvasNodeType.Image, "");
+        a.metadata = { storageKey: "resource:a" };
+        const b = node("b", CanvasNodeType.Image, "b");
+        const root = node("root", CanvasNodeType.Image, "");
+        root.metadata = { isBatchRoot: true };
+        const child = node("child", CanvasNodeType.Image, "");
+        child.metadata = { batchRootId: root.id };
+        const nodes = [a, b, root, child];
+        const connections = [{ id: "a-root", fromNodeId: a.id, toNodeId: root.id }, { id: "group", fromNodeId: root.id, toNodeId: child.id }];
+        expect(getGenerationResourceNodes(child.id, nodes, connections).map((item) => item.id)).toEqual(["a"]);
+        expect(getGenerationResourceNodes(child.id, nodes, [...connections, { id: "b-child", fromNodeId: b.id, toNodeId: child.id }, { id: "b-child-duplicate", fromNodeId: b.id, toNodeId: child.id }]).map((item) => item.id)).toEqual(["b"]);
+        root.metadata = { isBatchRoot: true, batchRootId: child.id };
+        child.metadata = { isBatchRoot: true, batchRootId: root.id };
+        expect(getGenerationResourceNodes(child.id, nodes, [])).toEqual([]);
+    });
+    test("批次子图沿父批次继承原始参考图，不把结果分组边当作参考图", () => {
+        const a = node("a", CanvasNodeType.Image, "data:image/png;base64,a");
+        const b = node("b", CanvasNodeType.Image, "data:image/png;base64,b");
+        const root = node("root", CanvasNodeType.Image, "data:image/png;base64,result");
+        root.metadata = { ...root.metadata, isBatchRoot: true, batchChildIds: ["child"] };
+        const child = node("child", CanvasNodeType.Image, "");
+        child.metadata = { batchRootId: root.id, composerContent: "结合 @图片1 和 @图片2" };
+        const nodes = [a, b, root, child];
+        const connections = [
+            { id: "a-root", fromNodeId: a.id, toNodeId: root.id },
+            { id: "b-root", fromNodeId: b.id, toNodeId: root.id },
+            { id: "group", fromNodeId: root.id, toNodeId: child.id },
+        ];
+        const context = buildNodeGenerationContext(child.id, nodes, connections, child.metadata.composerContent!, []);
+        expect(context.referenceImages.map((image) => image.id)).toEqual([a.id, b.id]);
+        expect(buildCanvasResourceReferences(nodes, connections, child.id).filter((ref) => ref.active).map((ref) => ref.nodeId)).toEqual([a.id, b.id]);
+    });
+
     test("Agent 保存的素材引用块在编辑器和再次提交时保持相同编号", () => {
         const target = targetNode();
         const character = node("character", CanvasNodeType.Image, "data:image/png;base64,a");
@@ -105,6 +169,42 @@ describe("canvas node generation position mentions", () => {
         expect(context.referenceImages.map((image) => image.id)).toEqual(["image-b"]);
         expect(context.referenceAudios.map((audio) => audio.id)).toEqual(["audio-a"]);
         expect(context.prompt).toBe("让 @图片1 配合 @音频1");
+    });
+
+    test("音频节点即使提示词只 @ 了文本，也会带上已连接的参考音频", () => {
+        const target: CanvasNodeData = {
+            id: "audio-target",
+            type: CanvasNodeType.Audio,
+            title: "audio-target",
+            position: { x: 0, y: 0 },
+            width: 220,
+            height: 160,
+            metadata: { composerContent: "参考 @文本1" },
+        };
+        const source = node("audio-source", CanvasNodeType.Audio, "data:audio/mpeg;base64,a");
+        const note = node("note", CanvasNodeType.Text, "旁白：你好");
+        const context = buildNodeGenerationContext(target.id, [source, note, target], [connection(source.id, target.id), connection(note.id, target.id)], "参考 @文本1", []);
+
+        expect(context.referenceAudios.map((audio) => audio.id)).toEqual(["audio-source"]);
+        expect(context.prompt).toContain("旁白：你好");
+    });
+
+    test("只有 storageKey 的已生成音频也可以作为音频节点参考输入", () => {
+        const target: CanvasNodeData = {
+            id: "audio-target",
+            type: CanvasNodeType.Audio,
+            title: "audio-target",
+            position: { x: 0, y: 0 },
+            width: 220,
+            height: 160,
+            metadata: {},
+        };
+        const source = node("audio-source", CanvasNodeType.Audio, "");
+        source.metadata = { storageKey: "resource:audio-source", mimeType: "audio/wav", durationMs: 2400 };
+        const context = buildNodeGenerationContext(target.id, [source, target], [connection(source.id, target.id)], "你好", []);
+
+        expect(context.referenceAudios).toHaveLength(1);
+        expect(context.referenceAudios[0]).toMatchObject({ id: source.id, storageKey: "resource:audio-source", type: "audio/wav" });
     });
 
     test("旧节点 token 只做读取迁移，不再进入生成提示词", () => {
