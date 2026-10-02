@@ -10405,7 +10405,7 @@ html:not(.dark) .canvas-generation-settings-trigger.ant-btn[aria-expanded="true"
         animation: canvas-connection-flow 1.25s var(--motion-ease-linear) infinite;
     }
 
-    /* Normalize the cycle to pathLength so every curve carries one light trail. */
+    /* 流光周期与虚线流动错开，避免两者同步移动。 */
     .canvas-connection-comet {
         animation: canvas-connection-comet 2.1s var(--motion-ease-linear) infinite;
     }
@@ -10441,10 +10441,10 @@ html:not(.dark) .canvas-generation-settings-trigger.ant-btn[aria-expanded="true"
         }
     }
 
-    /* Match the normalized dash period for a seamless loop. */
+    /* 位移量等于 dasharray 之和（16 + 118），保持循环连续。 */
     @keyframes canvas-connection-comet {
         to {
-            stroke-dashoffset: -100;
+            stroke-dashoffset: -134;
         }
     }
 
