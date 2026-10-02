@@ -110,7 +110,7 @@ func (s *Service) runCloudAgentModelStep(ctx context.Context, userID, runID stri
 		// 重启恢复：上一个运行时进程已为这一步建好模型任务（可能已经出结果），
 		// 只是没来得及把结果交回就退出了。运行时对 /model 串行调用，此时仍挂着的
 		// 步骤任务只可能是这种遗留任务：接手等待它的结果，不再建新任务和订单。
-		if false {
+		if state.ActiveTaskID != "" {
 			adopt, released, err := s.adoptCloudAgentPiModelStep(userID, runID, state.ActiveTaskID)
 			if err != nil {
 				return nil, false, err

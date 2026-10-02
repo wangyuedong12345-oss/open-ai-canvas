@@ -30,6 +30,11 @@ func TestSetEnvValuePreservesOtherSettings(t *testing.T) {
 	if err := os.WriteFile(path, []byte("# keep\nCANVAS_IMAGE_TAG=1.0.0\nPOSTGRES_DB=canvas\n"), 0o640); err != nil {
 		t.Fatal(err)
 	}
+	// Windows does not retain POSIX permission bits; compare the actual source mode.
+	originalStat, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := setEnvValue(path, "CANVAS_IMAGE_TAG", "1.2.2-preview.1"); err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +50,8 @@ func TestSetEnvValuePreservesOtherSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stat.Mode().Perm() != 0o640 {
-		t.Fatalf("mode=%o, want 640", stat.Mode().Perm())
+	if stat.Mode().Perm() != originalStat.Mode().Perm() {
+		t.Fatalf("mode=%o, want %o", stat.Mode().Perm(), originalStat.Mode().Perm())
 	}
 }
 

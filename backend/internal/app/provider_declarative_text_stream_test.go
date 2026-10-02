@@ -15,6 +15,8 @@ import (
 
 func TestDeclarativeTextStreaming(t *testing.T) {
 	t.Setenv("CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS", "127.0.0.1")
+	// Plugin catalog initialization is fixture setup, outside the request deadline.
+	registry := loadOfficialFallbackRegistry()
 	for _, wire := range []struct {
 		id, path, event, response string
 	}{
@@ -92,7 +94,7 @@ func TestDeclarativeTextStreaming(t *testing.T) {
 						}
 					},
 				}
-				result, err := runTextTask(withProtocolRegistry(ctx, loadOfficialFallbackRegistry()), input)
+				result, err := runTextTask(withProtocolRegistry(ctx, registry), input)
 				if calls.Load() != 1 {
 					t.Fatalf("upstream calls = %d, want exactly one", calls.Load())
 				}

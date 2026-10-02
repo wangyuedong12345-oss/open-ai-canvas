@@ -25,11 +25,11 @@ func postStreamingAgent(ctx context.Context, config providerConfig, path string,
 	if len(onReasoning) > 0 {
 		parser.emitReasoning = onReasoning[0]
 	}
-	data, mimeType, err := postStreamingBinary(ctx, config, path, body, parser.consume)
+	data, _, err := postStreamingBinaryUntil(ctx, config, path, body, parser.consume, func() bool { return parser.done || parser.err != nil })
 	if err != nil {
 		return nil, err
 	}
-	if !strings.Contains(strings.ToLower(mimeType), "event-stream") {
+	if !parser.streamDetected {
 		var payload map[string]interface{}
 		if err := json.Unmarshal(data, &payload); err != nil {
 			return nil, fmt.Errorf("Agent 接口返回格式无效：%w", err)
@@ -47,16 +47,18 @@ type streamingAgentToolCall struct {
 }
 
 type streamingAgentParser struct {
-	protocol      string
-	buffer        string
-	text          strings.Builder
-	reasoning     strings.Builder
-	toolCalls     map[int]*streamingAgentToolCall
-	toolCallByID  map[string]int
-	completed     map[string]interface{}
-	err           error
-	emit          func(string)
-	emitReasoning func(string)
+	protocol       string
+	buffer         string
+	text           strings.Builder
+	reasoning      strings.Builder
+	toolCalls      map[int]*streamingAgentToolCall
+	toolCallByID   map[string]int
+	completed      map[string]interface{}
+	streamDetected bool
+	done           bool
+	err            error
+	emit           func(string)
+	emitReasoning  func(string)
 }
 
 func newStreamingAgentParser(protocol string, emit func(string)) *streamingAgentParser {
@@ -64,22 +66,27 @@ func newStreamingAgentParser(protocol string, emit func(string)) *streamingAgent
 }
 
 func (p *streamingAgentParser) consume(mimeType string, chunk []byte) {
-	if p == nil || p.err != nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") || len(chunk) == 0 {
+	if p == nil || p.err != nil || p.done || len(chunk) == 0 {
 		return
 	}
 	p.buffer += string(chunk)
+	trimmed := strings.TrimSpace(p.buffer)
+	p.streamDetected = p.streamDetected || strings.Contains(strings.ToLower(mimeType), "event-stream") || strings.HasPrefix(trimmed, "data:") || strings.HasPrefix(trimmed, "event:")
+	if !p.streamDetected {
+		return
+	}
 	p.consumeFrames(false)
 }
 
 func (p *streamingAgentParser) flush() {
-	if p == nil || p.err != nil {
+	if p == nil || p.err != nil || p.done {
 		return
 	}
 	p.consumeFrames(true)
 }
 
 func (p *streamingAgentParser) consumeFrames(flush bool) {
-	for p.err == nil {
+	for p.err == nil && !p.done {
 		match := sseFrameBoundaryPattern.FindStringIndex(p.buffer)
 		if match == nil {
 			break
@@ -87,7 +94,7 @@ func (p *streamingAgentParser) consumeFrames(flush bool) {
 		p.consumeFrame(p.buffer[:match[0]])
 		p.buffer = p.buffer[match[1]:]
 	}
-	if flush && p.err == nil && strings.TrimSpace(p.buffer) != "" {
+	if flush && p.err == nil && !p.done && strings.TrimSpace(p.buffer) != "" {
 		p.consumeFrame(p.buffer)
 		p.buffer = ""
 	}
@@ -105,7 +112,11 @@ func (p *streamingAgentParser) consumeFrame(frame string) {
 		}
 	}
 	raw := strings.TrimSpace(strings.Join(dataLines, "\n"))
-	if raw == "" || raw == "[DONE]" {
+	if raw == "[DONE]" {
+		p.done = true
+		return
+	}
+	if raw == "" {
 		return
 	}
 	var payload map[string]interface{}

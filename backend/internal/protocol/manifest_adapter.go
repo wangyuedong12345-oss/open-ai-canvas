@@ -401,6 +401,8 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 	result := make([]MediaReference, 0)
 	for _, item := range manifestArray(value) {
 		switch typed := item.(type) {
+		case []any:
+			result = append(result, mediaReferencesFromManifestValue(typed, kind, ephemeral)...)
 		case string:
 			trimmed := strings.TrimSpace(typed)
 			if trimmed == "" {
@@ -414,6 +416,17 @@ func mediaReferencesFromManifestValue(value any, kind string, ephemeral bool) []
 			}
 			result = append(result, reference)
 		case map[string]any:
+			if urls, ok := typed["url"].([]any); ok {
+				for _, url := range urls {
+					entry := make(map[string]any, len(typed))
+					for key, value := range typed {
+						entry[key] = value
+					}
+					entry["url"] = url
+					result = append(result, mediaReferencesFromManifestValue(entry, kind, ephemeral)...)
+				}
+				continue
+			}
 			reference := MediaReference{
 				ID: manifestString(typed["id"]), URL: manifestString(typed["url"]), DataURL: manifestString(typed["dataUrl"]),
 				Kind: defaultValue(manifestString(typed["kind"]), kind), Role: manifestString(typed["role"]), MIMEType: manifestString(typed["mimeType"]),

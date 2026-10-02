@@ -35,7 +35,17 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	if wire == string(model.ChannelInterfaceOpenAIResponse) {
 		wire = "responses"
 	}
-	if input.Mode != "text" || !input.StreamText || (wire != "chat-completion" && wire != "responses" && wire != "claude-api") {
+	if wire != "chat-completion" && wire != "responses" && wire != "claude-api" {
+		switch {
+		case strings.HasSuffix(spec.Path, "/chat/completions"):
+			wire = "chat-completion"
+		case strings.HasSuffix(spec.Path, "/responses"):
+			wire = "responses"
+		case strings.HasSuffix(spec.Path, "/messages"):
+			wire = "claude-api"
+		}
+	}
+	if input.Mode != "text" || (wire != "chat-completion" && wire != "responses" && wire != "claude-api") {
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
 	}
@@ -43,8 +53,10 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	if body == nil {
 		return nil, nil, errors.New("声明式流式文本请求体必须是 JSON 对象")
 	}
-	body["stream"] = true
-	if wire == "chat-completion" {
+	if input.StreamText {
+		body["stream"] = true
+	}
+	if input.StreamText && wire == "chat-completion" {
 		if err := ensureChatCompletionStreamUsage(body); err != nil {
 			return nil, nil, err
 		}
@@ -52,9 +64,12 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 	spec.Body = body
 	parser := newStreamingAgentParser(wire, input.OnTextDelta)
 	parser.emitReasoning = input.OnReasoningDelta
-	data, mimeType, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume)
-	if err != nil || !strings.Contains(strings.ToLower(mimeType), "event-stream") {
+	data, _, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume, func() bool { return parser.done || parser.err != nil })
+	if err != nil {
 		return data, nil, err
+	}
+	if !parser.streamDetected {
+		return data, nil, nil
 	}
 	parser.flush()
 	parsed, err := parser.result()

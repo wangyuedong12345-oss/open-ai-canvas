@@ -52,7 +52,9 @@ func TestCloudAgentModelStepAdoptsOrphanedStepTask(t *testing.T) {
 	}
 
 	// 第二个进程：重新发起同一步。
-	result, _, err := s.runCloudAgentModelStep(context.Background(), "user", run.ID, messages, "off")
+	recoveryCtx, recoveryCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer recoveryCancel()
+	result, _, err := s.runCloudAgentModelStep(recoveryCtx, "user", run.ID, messages, "off")
 	if err != nil {
 		t.Fatal(err)
 	}

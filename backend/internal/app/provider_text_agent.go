@@ -154,7 +154,7 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 		applyAgentOutputLimit(body, agentStepOutputLimit(input), wire)
 		normalizeAgentToolChoice(body, input, wire)
 		spec.Body = body
-		if input.StreamText {
+		if input.StreamText || body["stream"] == true {
 			body["stream"] = true
 			if wire == "chat-completion" {
 				if err := ensureChatCompletionStreamUsage(body); err != nil {
@@ -163,11 +163,11 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 			}
 			parser := newStreamingAgentParser(wire, input.OnTextDelta)
 			parser.emitReasoning = input.OnReasoningDelta
-			data, mime, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume)
+			data, _, err := executeProtocolBinaryRequestWithConsumer(ctx, input.Config, spec, parser.consume, func() bool { return parser.done || parser.err != nil })
 			if err != nil {
 				return nil, err
 			}
-			if strings.Contains(strings.ToLower(mime), "event-stream") {
+			if parser.streamDetected {
 				parser.flush()
 				return parser.result()
 			}

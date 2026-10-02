@@ -566,7 +566,8 @@ func TestOfficialOpenAIImagesAsyncParsesAPIBNestedArrayURL(t *testing.T) {
 					{
 						"expires_at": 1789035412,
 						"url": [
-							"https://cdn.example/result.png"
+							"https://cdn.example/result.png",
+							"https://cdn.example/result-2.png"
 						]
 					}
 				]
@@ -577,7 +578,7 @@ func TestOfficialOpenAIImagesAsyncParsesAPIBNestedArrayURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Status != StatusSucceeded || state.Result == nil || len(state.Result.Images) != 1 || state.Result.Images[0].URL != "https://cdn.example/result.png" {
+	if state.Status != StatusSucceeded || state.Result == nil || len(state.Result.Images) != 2 || state.Result.Images[0].URL != "https://cdn.example/result.png" || state.Result.Images[1].URL != "https://cdn.example/result-2.png" || !state.Result.Images[0].Ephemeral || !state.Result.Images[1].Ephemeral {
 		t.Fatalf("state = %#v", state)
 	}
 }

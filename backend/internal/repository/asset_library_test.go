@@ -73,7 +73,7 @@ func TestUserAssetsPagePaginatesAndIsolatesUsers(t *testing.T) {
 	}
 }
 
-func TestUserAssetLibraryExcludesEntityRecordsFromPageAndFacets(t *testing.T) {
+func TestUserAssetLibraryIncludesEntityRecordsInPageAndFacets(t *testing.T) {
 	repo, db := newAssetLibraryTestRepository(t)
 	now := time.Now().UTC()
 	assets := []model.Asset{
@@ -91,29 +91,29 @@ func TestUserAssetLibraryExcludesEntityRecordsFromPageAndFacets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if total != 1 || len(page) != 1 || page[0].ID != "image-character" {
-		t.Fatalf("page result = total %d, assets %#v; want only image-character", total, page)
+	if total != 2 || len(page) != 2 || page[0].ID != "image-character" || page[1].ID != "entity-character" {
+		t.Fatalf("page result = total %d, assets %#v; want image-character and entity-character", total, page)
 	}
 
 	kindRows, categoryRows, folderRows, err := repo.UserAssetFacets("user-1", UserAssetPageFilter{Status: "active"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if facetCount(kindRows, "entity") != 0 || facetCount(kindRows, "image") != 2 {
-		t.Fatalf("kind facets = %#v; want image 2 and entity 0", kindRows)
+	if facetCount(kindRows, "entity") != 1 || facetCount(kindRows, "image") != 2 {
+		t.Fatalf("kind facets = %#v; want image 2 and entity 1", kindRows)
 	}
-	if facetCount(categoryRows, string(model.AssetCategoryCharacter)) != 1 {
-		t.Fatalf("category facets = %#v; want character 1", categoryRows)
+	if facetCount(categoryRows, string(model.AssetCategoryCharacter)) != 2 {
+		t.Fatalf("category facets = %#v; want character 2", categoryRows)
 	}
-	if facetCount(folderRows, "") != 2 {
-		t.Fatalf("folder facets = %#v; want uncategorized 2", folderRows)
+	if facetCount(folderRows, "") != 3 {
+		t.Fatalf("folder facets = %#v; want uncategorized 3", folderRows)
 	}
 
 	kindRows, categoryRows, folderRows, err = repo.UserAssetFacets("user-1", UserAssetPageFilter{Status: "active", Category: string(model.AssetCategoryCharacter)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if facetCount(kindRows, "image") != 1 || facetCount(categoryRows, string(model.AssetCategoryMaterial)) != 1 || facetCount(folderRows, "") != 1 {
+	if facetCount(kindRows, "image") != 1 || facetCount(kindRows, "entity") != 1 || facetCount(categoryRows, string(model.AssetCategoryMaterial)) != 1 || facetCount(folderRows, "") != 2 {
 		t.Fatalf("contextual facets = kind %#v, category %#v, folder %#v", kindRows, categoryRows, folderRows)
 	}
 }
