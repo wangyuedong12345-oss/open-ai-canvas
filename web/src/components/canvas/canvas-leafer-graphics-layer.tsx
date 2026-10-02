@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 import { Group, Leafer, Path, Rect } from "leafer-ui";
 
 import { activeConnectionPath, canvasConnectionPath } from "@/components/canvas/canvas-connections";
+import type { CanvasConnectionStyle } from "@/lib/canvas/canvas-appearance";
 import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-connection";
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
@@ -16,6 +17,7 @@ type CanvasLeaferGraphicsLayerProps = {
     viewport: ViewportTransform;
     theme: CanvasTheme;
     displayConnections: CanvasDisplayConnection[];
+    connectionStyle: CanvasConnectionStyle;
     selectedConnectionId: string | null;
     relatedConnectionIds: Set<string>;
     scriptScrollTopById: Record<string, number>;
@@ -144,7 +146,7 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
         const underlay = underlayRef.current;
         if (!underlay) return;
         rebuildConnections(underlay, props);
-    }, [props.displayConnections, props.relatedConnectionIds, props.scriptScrollTopById, props.selectedConnectionId, props.theme]);
+    }, [props.connectionStyle, props.displayConnections, props.relatedConnectionIds, props.scriptScrollTopById, props.selectedConnectionId, props.theme]);
 
     useLayoutEffect(() => {
         const overlay = overlayRef.current;
@@ -272,19 +274,23 @@ function connectionSceneSignature(connection: CanvasDisplayConnection["connectio
         emphasized ? "active" : "idle",
         props.theme.accent.primary,
         props.theme.node.muted,
+        props.connectionStyle.width,
+        props.connectionStyle.opacity,
     ].join("|");
 }
 
 function syncConnectionPath(entry: ConnectionSceneEntry, props: CanvasLeaferGraphicsLayerProps, preview: CanvasNodeDragPreview | null, previewIds: ReadonlySet<string> | null = preview?.nodeIds || null) {
     const from = translatePreviewNode(entry.from, previewIds, preview);
     const to = translatePreviewNode(entry.to, previewIds, preview);
+    const emphasized = props.selectedConnectionId === entry.connection.id || props.relatedConnectionIds.has(entry.connection.id);
+    const connectionOpacity = props.connectionStyle.opacity / 100;
     entry.path.set({
         path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0).pathD,
-        stroke: props.theme.node.muted,
-        strokeWidth: 1.5,
+        stroke: emphasized ? props.theme.accent.primary : props.theme.node.muted,
+        strokeWidth: emphasized ? Math.max(props.connectionStyle.width * 1.4, props.connectionStyle.width + 0.8) : props.connectionStyle.width,
         strokeScaleFixed: true,
         strokeCap: "round",
-        opacity: 0.24,
+        opacity: emphasized ? Math.max(connectionOpacity, 0.92) : connectionOpacity,
         hittable: false,
     });
 }

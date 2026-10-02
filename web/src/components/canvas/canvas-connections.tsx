@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 
+import { DEFAULT_CANVAS_CONNECTION_STYLE, type CanvasConnectionStyle } from "@/lib/canvas/canvas-appearance";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
@@ -16,6 +17,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     fromScrollTop = 0,
     toScrollTop = 0,
     active,
+    connectionStyle = DEFAULT_CANVAS_CONNECTION_STYLE,
     visualMode = "full",
     hideVisual = false,
     onSelect,
@@ -27,6 +29,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     fromScrollTop?: number;
     toScrollTop?: number;
     active: boolean;
+    connectionStyle?: CanvasConnectionStyle;
     visualMode?: "full" | "hover-only";
     hideVisual?: boolean;
     onSelect: () => void;
@@ -38,12 +41,26 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     const emphasized = active || hovered;
     const showVisual = !hideVisual && (visualMode === "full" || emphasized);
     const showBaseVisual = showVisual && visualMode === "full";
+    const showEmphasis = showVisual && emphasized;
+    const connectionOpacity = connectionStyle.opacity / 100;
+    const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
     const curveLength = showVisual && emphasized ? connectionCurveLength(startX, startY, endX, endY) : 0;
     const cometLength = Math.min(CONNECTION_COMET_LENGTH, curveLength * 0.85);
     const normalizedCometLength = curveLength ? 100 * cometLength / curveLength : 0;
 
     return (
         <g>
+            {showEmphasis ? <>
+                <defs>
+                    <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={startX} y1={startY} x2={endX} y2={endY}>
+                        <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.18} />
+                        <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.58} />
+                        <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0.34} />
+                    </linearGradient>
+                </defs>
+                <path d={pathD} stroke={theme.accent.primary} strokeWidth={Math.max(4, connectionStyle.width * 4)} vectorEffect="non-scaling-stroke" strokeOpacity={Math.max(0.12, connectionOpacity * 0.24)} fill="none" strokeLinecap="round" style={{ pointerEvents: "none", filter: "blur(3px)" }} />
+                <path className="canvas-connection-flow" d={pathD} stroke={`url(#${gradientId})`} strokeWidth={Math.max(1, connectionStyle.width * 1.1)} vectorEffect="non-scaling-stroke" strokeOpacity={Math.max(0.6, connectionOpacity)} strokeDasharray="18 26" fill="none" strokeLinecap="round" style={{ pointerEvents: "none" }} />
+            </> : null}
             <path
                 data-connection-id={connection.id}
                 d={pathD}
@@ -67,9 +84,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             {showBaseVisual ? <path
                 d={pathD}
                 stroke={theme.node.muted}
-                strokeWidth="3.5"
+                strokeWidth={connectionStyle.width + 1.5}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity="0.16"
+                strokeOpacity={connectionOpacity * 0.2}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -77,18 +94,18 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             /> : null}
             {showBaseVisual ? <path
                 d={pathD}
-                stroke={theme.node.muted}
-                strokeWidth="1.5"
+                stroke={emphasized ? theme.accent.primary : theme.node.muted}
+                strokeWidth={emphasized ? Math.max(connectionStyle.width * 1.4, connectionStyle.width + 0.8) : connectionStyle.width}
                 vectorEffect="non-scaling-stroke"
-                strokeOpacity="0.72"
+                strokeOpacity={emphasized ? Math.max(connectionOpacity, 0.92) : connectionOpacity}
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
             {showBaseVisual ? <>
-                <circle cx={startX} cy={startY} r="2.5" fill={theme.node.muted} fillOpacity="0.72" vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
-                <circle cx={endX} cy={endY} r="2.5" fill={theme.node.muted} fillOpacity="0.72" vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={startX} cy={startY} r="2.5" fill={theme.node.muted} fillOpacity={connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={endX} cy={endY} r="2.5" fill={theme.node.muted} fillOpacity={connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
             {showVisual && emphasized ? <>
                 {/* Keep the light trail the same length across curves; center the shorter layers. */}
@@ -104,7 +121,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                     d={pathD}
                     pathLength={100}
                     stroke="white"
-                    strokeWidth={width}
+                    strokeWidth={width * connectionStyle.width / DEFAULT_CANVAS_CONNECTION_STYLE.width}
                     strokeOpacity={opacity}
                     vectorEffect="non-scaling-stroke"
                     strokeDasharray={`${normalizedCometLength * fraction} ${100 - normalizedCometLength * fraction}`}
@@ -115,7 +132,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             </> : null}
         </g>
     );
-}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
+}, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.connectionStyle === next.connectionStyle && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
 
 export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0) {
     const startX = from.position.x + from.width;
