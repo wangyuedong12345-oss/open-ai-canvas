@@ -44,6 +44,7 @@ type UnderlayScene = LeaferScene & {
     connectionIdsByNodeId: Map<string, Set<string>>;
     dragPreview: CanvasNodeDragPreview | null;
     dragPreviewConnectionIds: Set<string>;
+    hoveredConnectionId?: string | null;
 };
 
 type ConnectionSceneEntry = {
@@ -127,12 +128,28 @@ export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps)
             overlay.dragPreview = preview;
             syncLiveSelectionBounds(overlay, propsRef.current, viewportRef.current.k);
         });
+        const connectionIdAt = (target: EventTarget | null) => target instanceof Element
+            ? target.closest("[data-connection-id]")?.getAttribute("data-connection-id") || null
+            : null;
+        const syncHoveredConnection = (event: MouseEvent) => {
+            const nextId = connectionIdAt(event.type === "mouseout" ? event.relatedTarget : event.target);
+            if (nextId === underlay.hoveredConnectionId) return;
+            const previous = underlay.hoveredConnectionId && underlay.connectionEntries.get(underlay.hoveredConnectionId);
+            if (previous) previous.path.visible = true;
+            underlay.hoveredConnectionId = nextId;
+            const next = nextId && underlay.connectionEntries.get(nextId);
+            if (next) next.path.visible = Boolean(underlay.dragPreview);
+        };
+        container.addEventListener("mouseover", syncHoveredConnection);
+        container.addEventListener("mouseout", syncHoveredConnection);
         resize();
 
         return () => {
             unsubscribe();
             unsubscribeSelection();
             unsubscribeNodeDrag();
+            container.removeEventListener("mouseover", syncHoveredConnection);
+            container.removeEventListener("mouseout", syncHoveredConnection);
             resizeObserver.disconnect();
             window.removeEventListener("resize", resize);
             underlay.leafer.destroy(true);
@@ -238,6 +255,7 @@ function rebuildConnections(scene: UnderlayScene, props: CanvasLeaferGraphicsLay
         entry.connection = connection;
         entry.from = from;
         entry.to = to;
+        entry.path.visible = connection.id !== scene.hoveredConnectionId || Boolean(scene.dragPreview);
         if (entry.signature !== signature || scene.dragPreview) {
             syncConnectionPath(entry, props, scene.dragPreview, previewIds);
             entry.signature = signature;
@@ -286,11 +304,13 @@ function syncConnectionPath(entry: ConnectionSceneEntry, props: CanvasLeaferGrap
     const connectionOpacity = props.connectionStyle.opacity / 100;
     entry.path.set({
         path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0).pathD,
-        stroke: emphasized ? props.theme.accent.primary : props.theme.node.muted,
+        stroke: emphasized ? "white" : props.theme.node.muted,
         strokeWidth: emphasized ? Math.max(props.connectionStyle.width * 1.4, props.connectionStyle.width + 0.8) : props.connectionStyle.width,
         strokeScaleFixed: true,
         strokeCap: "round",
-        opacity: emphasized ? Math.max(connectionOpacity, 0.92) : connectionOpacity,
+        // 选中虚线由 SVG 动画层绘制；拖动时 SVG 隐藏，预览层接管。
+        opacity: emphasized ? (preview ? Math.max(connectionOpacity, 0.92) : 0) : connectionOpacity,
+        dashPattern: emphasized ? [8, 7] : undefined,
         hittable: false,
     });
 }
@@ -319,6 +339,7 @@ function applyConnectionDragPreview(scene: UnderlayScene, props: CanvasLeaferGra
         const entry = scene.connectionEntries.get(connectionId);
         if (!entry) continue;
         syncConnectionPath(entry, props, preview, previewIds);
+        entry.path.visible = connectionId !== scene.hoveredConnectionId || Boolean(preview);
     }
 }
 

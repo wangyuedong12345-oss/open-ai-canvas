@@ -30,52 +30,24 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     connectionStyle?: CanvasConnectionStyle;
     visualMode?: "full" | "hover-only";
     hideVisual?: boolean;
-    onSelect: () => void;
+    onSelect: (event: ReactMouseEvent<SVGPathElement>) => void;
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
     const theme = canvasThemes[useActiveTheme()];
     const [hovered, setHovered] = useState(false);
     const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop);
     const emphasized = active || hovered;
-    const showVisual = !hideVisual && (visualMode === "full" || hovered);
+    const showVisual = !hideVisual && (visualMode === "full" || emphasized);
     const showEmphasis = !hideVisual && emphasized;
     const showFlow = showEmphasis && (visualMode === "full" || hovered || active);
     const connectionOpacity = connectionStyle.opacity / 100;
     const mainStrokeWidth = emphasized ? Math.max(connectionStyle.width * 1.4, connectionStyle.width + 0.8) : connectionStyle.width;
     const underlayStrokeWidth = emphasized ? connectionStyle.width + 3 : connectionStyle.width + 1.5;
     const flowStrokeWidth = Math.max(1, connectionStyle.width * 1.1);
-    const cometStrokeWidth = Math.max(1.2, connectionStyle.width * 1.3);
     const mainStrokeOpacity = emphasized ? Math.max(connectionOpacity, 0.92) : connectionOpacity;
-    const gradientId = `canvas-flow-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
     return (
         <g>
-            {showEmphasis ? <defs>
-                <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1={startX} y1={startY} x2={endX} y2={endY}>
-                    <stop offset="0%" stopColor={theme.node.muted} stopOpacity={0.18} />
-                    <stop offset="48%" stopColor={theme.accent.primary} stopOpacity={0.58} />
-                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0.34} />
-                </linearGradient>
-                {/* 流光头部的软化渐变：两端透明、中间亮，避免短划线看起来是硬色块 */}
-                <linearGradient id={`${gradientId}-comet`} x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor={theme.accent.primary} stopOpacity={0} />
-                    <stop offset="45%" stopColor={theme.accent.primary} stopOpacity={0.95} />
-                    <stop offset="100%" stopColor={theme.accent.primary} stopOpacity={0} />
-                </linearGradient>
-            </defs> : null}
-            {/* 光晕：只在强调态渲染。blur 是 filter，成本随线条数量线性上升，
-                常态几十条线全开会明显掉帧，所以刻意只给悬停/选中的那一条。
-                垫在底衬描边之下，不改动常态可读性那几层。 */}
-            {showEmphasis ? <path
-                d={pathD}
-                stroke={theme.accent.primary}
-                strokeWidth={Math.max(4, connectionStyle.width * 4)}
-                vectorEffect="non-scaling-stroke"
-                strokeOpacity={Math.max(0.12, connectionOpacity * 0.24)}
-                fill="none"
-                strokeLinecap="round"
-                style={{ pointerEvents: "none", filter: "blur(3px)" }}
-            /> : null}
             <path
                 data-connection-id={connection.id}
                 d={pathD}
@@ -88,7 +60,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 onMouseLeave={() => setHovered(false)}
                 onClick={(event) => {
                     event.stopPropagation();
-                    onSelect();
+                    onSelect(event);
                 }}
                 onContextMenu={(event) => {
                     event.preventDefault();
@@ -96,7 +68,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                     onContextMenu?.(event);
                 }}
             />
-            {showVisual ? <path
+            {showVisual && !emphasized ? <path
                 d={pathD}
                 stroke={theme.node.muted}
                 strokeWidth={underlayStrokeWidth}
@@ -107,9 +79,9 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 strokeLinejoin="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
-            {showVisual ? <path
+            {showVisual && !emphasized ? <path
                 d={pathD}
-                stroke={emphasized ? theme.accent.primary : theme.node.muted}
+                stroke={emphasized ? "white" : theme.node.muted}
                 strokeWidth={mainStrokeWidth}
                 vectorEffect="non-scaling-stroke"
                 strokeOpacity={mainStrokeOpacity}
@@ -119,33 +91,20 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 style={{ pointerEvents: "none" }}
             /> : null}
             {showVisual ? <>
-                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
-                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.accent.primary : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? "white" : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? "white" : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
             {showFlow ? <path
                 className="canvas-connection-flow"
                 d={pathD}
-                stroke={`url(#${gradientId})`}
+                stroke="white"
                 strokeWidth={flowStrokeWidth}
                 vectorEffect="non-scaling-stroke"
                 strokeOpacity={Math.max(0.6, connectionOpacity)}
-                strokeDasharray="18 26"
+                strokeDasharray="8 7"
                 fill="none"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                style={{ pointerEvents: "none" }}
-            /> : null}
-            {/* 流光：一小段高亮沿路径跑。周期与虚线流动刻意不同（2.1s vs 1.25s），
-                两者错拍才像有光在走；同频会锁成一条整体平移的虚线。 */}
-            {showFlow ? <path
-                className="canvas-connection-comet"
-                d={pathD}
-                stroke={`url(#${gradientId}-comet)`}
-                strokeWidth={cometStrokeWidth}
-                vectorEffect="non-scaling-stroke"
-                strokeDasharray="16 118"
-                fill="none"
-                strokeLinecap="round"
                 style={{ pointerEvents: "none" }}
             /> : null}
         </g>

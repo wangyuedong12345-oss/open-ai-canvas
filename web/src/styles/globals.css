@@ -10402,7 +10402,7 @@ html:not(.dark) .canvas-generation-settings-trigger.ant-btn[aria-expanded="true"
     }
 
     .canvas-connection-flow {
-        animation: canvas-connection-flow 1.25s var(--motion-ease-linear) infinite;
+        animation: canvas-selected-connection-flow 1.25s var(--motion-ease-linear) infinite;
     }
 
     /* 流光周期与虚线流动错开，避免两者同步移动。 */
@@ -10433,6 +10433,12 @@ html:not(.dark) .canvas-generation-settings-trigger.ant-btn[aria-expanded="true"
 
     .canvas-node-panel-placement-change {
         animation: canvas-node-panel-placement-blur 180ms var(--motion-ease-out) both;
+    }
+
+    @keyframes canvas-selected-connection-flow {
+        to {
+            stroke-dashoffset: -45;
+        }
     }
 
     @keyframes canvas-connection-flow {

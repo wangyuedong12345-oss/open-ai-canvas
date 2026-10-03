@@ -56,7 +56,7 @@ type CanvasProjectWorldLayersProps = {
     isNodeDragging: boolean;
     selectionBoundsElementRef: RefObject<HTMLDivElement | null>;
     renderCanvasNodeContent: (node: CanvasNodeData) => ReactNode;
-    onConnectionSelect: (connectionId: string) => void;
+    onConnectionSelect: (connectionId: string, event: ReactMouseEvent<SVGPathElement>) => void;
     onConnectionContextMenu: (event: ReactMouseEvent<SVGPathElement>, connectionId: string) => void;
     onNodeMouseDown: (event: ReactMouseEvent, nodeId: string) => void;
     onNodeHoverStart: (nodeId: string) => void;
@@ -130,7 +130,7 @@ export const CanvasProjectWorldLayers = memo(function CanvasProjectWorldLayers(p
                         visualMode="hover-only"
                         // 拖动预览由 Leafer 图形层逐帧同步；隐藏这层静态 SVG 描边，避免两套位置叠出残影。
                         hideVisual={props.isNodeDragging}
-                        onSelect={() => props.onConnectionSelect(connection.id)}
+                        onSelect={(event) => props.onConnectionSelect(connection.id, event)}
                         onContextMenu={(event) => props.onConnectionContextMenu(event, connection.id)}
                     />
                 ))}

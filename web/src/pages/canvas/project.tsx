@@ -29,7 +29,8 @@ import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useCanvasThemeStore, useCanvasThemeScope } from "@/stores/canvas/use-canvas-theme-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { App, Button } from "antd";
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Unplug } from "lucide-react";
+import { createPortal } from "react-dom";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { getNodeSpec } from "@/constant/canvas";
 import { CanvasConfigComposer } from "@/components/canvas/canvas-config-composer";
@@ -239,6 +240,15 @@ function InfiniteCanvasPage() {
     const [size, setSize] = useState({ width: 1200, height: 720 });
     const [selectedNodeIds, setSelectedNodeIds] = useState<Set<string>>(new Set());
     const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
+    const [connectionDisconnectTarget, setConnectionDisconnectTarget] = useState<{ id: string; x: number; y: number } | null>(null);
+    useEffect(() => {
+        setConnectionDisconnectTarget(null);
+    }, [projectId, viewport.x, viewport.y, viewport.k]);
+    useEffect(() => {
+        if (connectionDisconnectTarget && connectionDisconnectTarget.id !== selectedConnectionId) {
+            setConnectionDisconnectTarget(null);
+        }
+    }, [connectionDisconnectTarget, selectedConnectionId]);
     const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
     const [agentPrefillPrompt, setAgentPrefillPrompt] = useState("");
@@ -2687,12 +2697,14 @@ function InfiniteCanvasPage() {
                                                 isNodeDragging={isNodeDragging}
                                                 selectionBoundsElementRef={selectionBoundsElementRef}
                                                 renderCanvasNodeContent={renderCanvasNodeContent}
-                                                onConnectionSelect={(connectionId) => {
+                                                onConnectionSelect={(connectionId, event) => {
                                                     setSelectedConnectionId(connectionId);
+                                                    setConnectionDisconnectTarget({ id: connectionId, x: event.clientX, y: event.clientY });
                                                     setSelectedNodeIds(new Set());
                                                     setContextMenu(null);
                                                 }}
                                                 onConnectionContextMenu={(event, connectionId) => {
+                                                    setConnectionDisconnectTarget(null);
                                                     setSelectedConnectionId(connectionId);
                                                     setSelectedNodeIds(new Set());
                                                     closeConnectionCreateMenu();
@@ -2727,6 +2739,26 @@ function InfiniteCanvasPage() {
                                 </InfiniteCanvas>
 
                                 <CanvasActiveTaskPanel tasks={activeTasks} onCancelTask={cancelCanvasTask} topInset={focusMode ? "var(--space-3)" : "var(--canvas-topbar-offset)"} />
+                                {connectionDisconnectTarget && selectedConnectionId === connectionDisconnectTarget.id ? createPortal(
+                                    <button
+                                        type="button"
+                                        aria-label="断开连接"
+                                        title="断开连接"
+                                        data-canvas-no-zoom
+                                        className="fixed flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                                        style={{ left: connectionDisconnectTarget.x, top: connectionDisconnectTarget.y, zIndex: "var(--z-popover)", background: theme.spatial.surface, borderColor: theme.toolbar.border, color: theme.node.text }}
+                                        onPointerDown={(event) => event.stopPropagation()}
+                                        onMouseDown={(event) => event.stopPropagation()}
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            deleteConnection(connectionDisconnectTarget.id);
+                                            setConnectionDisconnectTarget(null);
+                                        }}
+                                    >
+                                        <Unplug className="size-4" aria-hidden="true" />
+                                    </button>,
+                                    document.body,
+                                ) : null}
 
                                 {focusMode ? (
                                     <CanvasFocusModeBar
