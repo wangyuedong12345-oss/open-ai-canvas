@@ -66,9 +66,17 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
             ) : (
                 <FluidOrb size={60} color="#7164f6" />
             )}
-            {appearance.launcherLabel ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
-            <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
-            {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}
+            {live ? (
+                <span className="canvas-agent-launcher-label" style={{ "--canvas-agent-status-color": statusColor } as CSSProperties}>
+                    <span aria-hidden="true" className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
+                    <span>{appearance.launcherLabel || appearance.agentName}</span>
+                    {approvalPending ? <span className="canvas-agent-launcher-pending-label">待审批</span> : null}
+                </span>
+            ) : <>
+                {appearance.launcherLabel ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
+                <span className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
+                {approvalPending ? <span className="canvas-agent-launcher-badge">待审批</span> : null}
+            </>}
         </motion.button>
     );
 }
