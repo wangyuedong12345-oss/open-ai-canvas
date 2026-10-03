@@ -81,7 +81,7 @@ export const ConnectionPath = React.memo(function ConnectionPath({
             /> : null}
             {showVisual && !emphasized ? <path
                 d={pathD}
-                stroke={emphasized ? "white" : theme.node.muted}
+                stroke={emphasized ? theme.node.text : theme.node.muted}
                 strokeWidth={mainStrokeWidth}
                 vectorEffect="non-scaling-stroke"
                 strokeOpacity={mainStrokeOpacity}
@@ -91,13 +91,13 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 style={{ pointerEvents: "none" }}
             /> : null}
             {showVisual ? <>
-                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? "white" : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
-                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? "white" : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.node.text : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
+                <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.node.text : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
             {showFlow ? <path
                 className="canvas-connection-flow"
                 d={pathD}
-                stroke="white"
+                stroke={theme.node.text}
                 strokeWidth={flowStrokeWidth}
                 vectorEffect="non-scaling-stroke"
                 strokeOpacity={Math.max(0.6, connectionOpacity)}

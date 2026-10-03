@@ -4445,7 +4445,7 @@ html:not(.dark) .creation-studio-control[aria-expanded="true"] { background: #e7
     .canvas-library-search {
         display: flex;
         min-width: 0;
-        height: 38px;
+        min-height: 38px;
         align-items: center;
         gap: 10px;
         border-radius: var(--r-lg);
@@ -7885,6 +7885,9 @@ html:not(.dark) .canvas-generation-settings-trigger.ant-btn[aria-expanded="true"
     }
 
     .canvas-floating-dock {
+        height: 38px;
+        padding: var(--space-1);
+        align-items: center;
         border: 0 !important;
         border-radius: var(--r-2xl) !important;
         background: color-mix(in srgb, var(--dock-surface) 72%, transparent) !important;

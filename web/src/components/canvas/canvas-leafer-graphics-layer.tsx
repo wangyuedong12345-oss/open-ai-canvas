@@ -7,7 +7,8 @@ import type { CanvasBatchConnectionPreview } from "@/lib/canvas/canvas-batch-con
 import { subscribeCanvasGraphicsViewportPreview, subscribeCanvasNodeDragPreview, subscribeCanvasSelectionPreview, type CanvasNodeDragPreview } from "@/lib/canvas/canvas-live-viewport";
 import { calculateCanvasPreviewTransform, sameCanvasViewport, shouldRebaseCanvasRaster } from "@/lib/canvas/canvas-leafer-viewport";
 import { offsetSelectedNodeBounds } from "@/lib/canvas/canvas-selection";
-import type { CanvasTheme } from "@/lib/canvas-theme";
+import { canvasThemes, type CanvasTheme } from "@/lib/canvas-theme";
+import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import type { CanvasDisplayConnection, CanvasNodeData, ConnectionHandle, Position, SelectionBox, ViewportTransform } from "@/types/canvas";
 
 type NodeBounds = { left: number; top: number; width: number; height: number; count: number } | null;
@@ -64,7 +65,9 @@ type OverlayScene = LeaferScene & {
     dragPreview: CanvasNodeDragPreview | null;
 };
 
-export function CanvasLeaferGraphicsLayer(props: CanvasLeaferGraphicsLayerProps) {
+export function CanvasLeaferGraphicsLayer(incomingProps: CanvasLeaferGraphicsLayerProps) {
+    const activeTheme = useActiveTheme();
+    const props = { ...incomingProps, theme: canvasThemes[activeTheme] };
     const underlayHostRef = useRef<HTMLDivElement>(null);
     const overlayHostRef = useRef<HTMLDivElement>(null);
     const underlayRef = useRef<UnderlayScene | null>(null);
@@ -292,6 +295,7 @@ function connectionSceneSignature(connection: CanvasDisplayConnection["connectio
         emphasized ? "active" : "idle",
         props.theme.accent.primary,
         props.theme.node.muted,
+        props.theme.node.text,
         props.connectionStyle.width,
         props.connectionStyle.opacity,
     ].join("|");
@@ -304,7 +308,7 @@ function syncConnectionPath(entry: ConnectionSceneEntry, props: CanvasLeaferGrap
     const connectionOpacity = props.connectionStyle.opacity / 100;
     entry.path.set({
         path: canvasConnectionPath(entry.connection, from, to, props.scriptScrollTopById[entry.from.id] || 0, props.scriptScrollTopById[entry.to.id] || 0).pathD,
-        stroke: emphasized ? "white" : props.theme.node.muted,
+        stroke: emphasized ? props.theme.node.text : props.theme.node.muted,
         strokeWidth: emphasized ? Math.max(props.connectionStyle.width * 1.4, props.connectionStyle.width + 0.8) : props.connectionStyle.width,
         strokeScaleFixed: true,
         strokeCap: "round",

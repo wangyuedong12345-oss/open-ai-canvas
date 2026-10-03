@@ -305,17 +305,17 @@ function DockSwitch({ entry, compact, showLabel, motionEnabled, metrics }: { ent
     const selectedIndex = Math.max(0, entry.options.findIndex((option) => option.value === entry.value));
     const touch = metrics.base >= 40;
     const labeled = showLabel || entry.options.some((option) => option.displayLabel);
-    const slot = labeled ? (touch ? 68 : compact ? 58 : 64) : touch ? 32 : compact ? 24 : 26;
+    const slot = labeled ? (touch ? 68 : compact ? 58 : 64) : touch ? 32 : compact ? 22 : 24;
     const slotHeight = labeled ? metrics.base : slot;
-    const gap = labeled ? (touch ? 4 : 3) : touch ? 10 : compact ? 8 : 10;
-    const padX = labeled ? (touch ? 5 : 4) : touch ? 7 : compact ? 6 : 7;
+    const gap = labeled ? (touch ? 4 : 3) : touch ? 8 : 6;
+    const padX = labeled ? (touch ? 5 : 4) : touch ? 4 : 3;
     const defaultIconSize = touch ? 16 : 15;
 
     return (
         <span
             role="radiogroup"
             aria-label={entry.label}
-            className={cn("aceternity-dock-switch relative flex shrink-0 self-end items-center", labeled && "is-labeled")}
+            className={cn("aceternity-dock-switch relative flex shrink-0 self-center items-center", labeled && "is-labeled")}
             onKeyDown={(event) => {
                 if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
                 event.preventDefault();

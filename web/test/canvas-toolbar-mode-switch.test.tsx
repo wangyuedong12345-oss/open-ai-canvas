@@ -32,12 +32,17 @@ describe("canvas toolbar mode switch", () => {
         const modeSwitch = entries.find((entry) => entry.kind === "switch");
         if (!modeSwitch) throw new Error("Missing canvas mode switch");
         const html = renderToStaticMarkup(<FloatingDock size={size} items={[modeSwitch]} />);
-        const diameter = size === "compact" ? 24 : 26;
+        const diameter = size === "compact" ? 22 : 24;
 
         expect(html).toContain(`width:${diameter}px;height:${diameter}px`);
         expect(html.match(/aceternity-dock-switch-thumb/g)).toHaveLength(1);
         expect(html).toContain("absolute top-1/2 rounded-full");
-        expect(html).toContain("grid size-4 shrink-0 place-items-center");
+        for (const label of ["区域选择", "抓手工具"]) {
+            const button = html.match(new RegExp(`<button\\b[^>]*aria-label="${label}"[^>]*>[\\s\\S]*?</button>`))?.[0];
+            expect(button).toBeDefined();
+            expect(button).toContain("width:14px;height:14px");
+            expect(button).toContain("<svg");
+        }
         expect(html).not.toContain("is-labeled");
         expect(html).not.toContain("选择</span>");
         expect(html).not.toContain("移动</span>");

@@ -49,18 +49,19 @@ describe("canvas custom appearance", () => {
         expect(resolveCanvasConnectionAppearance(normalizeCanvasAppearance({ mode: "dark", connection: { width: 12, opacity: -5 } }, "light"))).toEqual({ width: 8, opacity: 0 });
     });
 
-    test("resolves the black preset to a black background and fully opaque black grid", () => {
+    test("resolves the black preset to a black background and contrasting gray grid", () => {
         const appearance = canvasAppearanceForTheme(DEFAULT_CANVAS_COLOR_THEME);
         expect(resolveCanvasAppearance(appearance, "light")).toEqual({
             baseTheme: "dark",
             background: "#000000",
-            grid: "#000000",
+            grid: "#888888",
         });
-        expect(resolveCanvasGridColor(appearance, "light", "dots")).toBe("#000000");
+        expect(resolveCanvasGridColor(appearance, "light", "dots")).toBe("#888888");
+        expect(resolveCanvasGridColor(appearance, "light", "lines")).toBe("#888888");
         expect(resolveCanvasAppearance(customCanvasAppearanceFromTheme("dark"), "light")).toEqual({
             baseTheme: "dark",
             background: "#000000",
-            grid: "rgba(0,0,0,1)",
+            grid: "rgba(136,136,136,1)",
         });
     });
 
@@ -85,7 +86,7 @@ describe("canvas custom appearance", () => {
         });
 
         const dark = enterCustomCanvasAppearance(canvasAppearanceForTheme("dark"), "dark");
-        expect(dark.custom).toMatchObject({ baseTheme: "dark", backgroundColor: "#000000", backgroundBrightness: 0, gridColor: "#000000", gridOpacity: 100 });
+        expect(dark.custom).toMatchObject({ baseTheme: "dark", backgroundColor: "#000000", backgroundBrightness: 0, gridColor: "#888888", gridOpacity: 100 });
     });
 
     test("restores a previous custom profile only under the same base theme", () => {
