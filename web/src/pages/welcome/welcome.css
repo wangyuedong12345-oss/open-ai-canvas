@@ -1,4 +1,4 @@
-/* 欢迎页 · 单屏极简布局：左侧出血 Pebble 角色 + 右下渐隐 Mioo 字标 + 右上 CTA。 */
+/* 欢迎页 · 单屏极简布局：左侧出血 Pebble 角色 + 右下渐隐 FRAMIND 字标 + 右上 CTA。 */
 .welcome-page {
     --welcome-bg: #f6f6f4;
     --welcome-ink: #17161c;
@@ -66,13 +66,13 @@ body:has(.welcome-page) {
     outline-offset: 3px;
 }
 
-/* 右下渐隐 Mioo 字标：底部被视口裁切并向下渐隐。 */
+/* 右下渐隐 FRAMIND 字标：底部被视口裁切并向下渐隐。 */
 .welcome-wordmark {
     position: absolute;
     right: 5vw;
     bottom: -0.22em;
     z-index: 1;
-    font-size: clamp(160px, 24vw, 420px);
+    font-size: clamp(90px, 14vw, 245px);
     font-weight: 800;
     line-height: 0.82;
     letter-spacing: -0.045em;
@@ -120,7 +120,7 @@ body:has(.welcome-page) {
     }
     .welcome-wordmark {
         right: 3vw;
-        font-size: 30vw;
+        font-size: 17vw;
     }
 }
 

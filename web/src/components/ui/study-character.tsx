@@ -39,6 +39,6 @@ export function StudyCharacter({ size = 60, className }: { size?: number; classN
     }, [size]);
 
     return <span className={cn("study-character", className)} style={{ width: size, height: size }} aria-hidden="true">
-        <svg ref={svgRef} />
+        <span className="study-character-mirror"><svg ref={svgRef} /></span>
     </span>;
 }

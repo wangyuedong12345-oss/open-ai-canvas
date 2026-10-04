@@ -5,7 +5,14 @@
     pointer-events: none;
 }
 
-.study-character > svg {
+.study-character-mirror {
+    display: block;
+    width: 100%;
+    height: 100%;
+    transform: scaleX(-1);
+}
+
+.study-character-mirror > svg {
     display: block;
     width: 100%;
     height: 100%;

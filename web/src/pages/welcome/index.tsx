@@ -7,7 +7,7 @@ import "./welcome.css";
 
 export default function WelcomePage() {
     useEffect(() => {
-        document.title = "Mioo · 让想象化作影像";
+        document.title = "FRAMIND · 让想象化作影像";
     }, []);
 
     return (
@@ -19,7 +19,7 @@ export default function WelcomePage() {
                 开始创作
                 <ArrowUpRight size={20} aria-hidden="true" />
             </a>
-            <div className="welcome-wordmark" aria-hidden="true">Mioo</div>
+            <div className="welcome-wordmark" aria-hidden="true">FRAMIND</div>
         </div>
     );
 }
