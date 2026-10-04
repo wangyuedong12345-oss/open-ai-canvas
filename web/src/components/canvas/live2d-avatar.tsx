@@ -34,7 +34,36 @@ function loadCore() {
     return corePromise;
 }
 
-export function Live2DAvatar({
+type Live2DAvatarProps = {
+    url: string;
+    fallbackURL?: string;
+    width: number;
+    height: number;
+    reducedMotion?: boolean;
+    fallback?: ReactNode;
+    onReady?: () => void;
+    onError?: (message: string) => void;
+};
+
+export function Live2DAvatar({ fallbackURL, ...props }: Live2DAvatarProps) {
+    const [failedURL, setFailedURL] = useState("");
+    const usingFallback = failedURL === props.url && Boolean(fallbackURL && fallbackURL !== props.url);
+    const url = usingFallback ? fallbackURL! : props.url;
+    return (
+        <Live2DModelAvatar
+            {...props}
+            key={url}
+            url={url}
+            onReady={usingFallback ? undefined : props.onReady}
+            onError={(reason) => {
+                props.onError?.(reason);
+                if (!usingFallback) setFailedURL(props.url);
+            }}
+        />
+    );
+}
+
+function Live2DModelAvatar({
     url,
     width,
     height,
@@ -42,15 +71,7 @@ export function Live2DAvatar({
     fallback,
     onReady,
     onError,
-}: {
-    url: string;
-    width: number;
-    height: number;
-    reducedMotion?: boolean;
-    fallback?: ReactNode;
-    onReady?: () => void;
-    onError?: (message: string) => void;
-}) {
+}: Live2DAvatarProps) {
     const host = useRef<HTMLSpanElement>(null);
     const callbacks = useRef({ onReady, onError });
     callbacks.current = { onReady, onError };

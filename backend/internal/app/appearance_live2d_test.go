@@ -201,6 +201,17 @@ func TestLive2DAppearanceImportPublishAndDetach(t *testing.T) {
 	if _, _, err := svc.Live2DAsset(nil, imported.ResourceID, "../avatar/texture.png"); err == nil {
 		t.Fatal("traversal accepted")
 	}
+	value.Canvas.Live2DSource = "builtin"
+	value.Canvas.Live2DBuiltinModel = "nico"
+	if _, err := svc.UpdateAppearance(admin, value); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.Live2DAsset(nil, imported.ResourceID, imported.Entry); err == nil {
+		t.Fatal("unselected custom model still public")
+	}
+	if _, _, err := svc.Live2DAsset(admin, imported.ResourceID, imported.Entry); err != nil {
+		t.Fatal("retained custom model cannot be previewed", err)
+	}
 	refs := svc.appearanceResourceReferences([]string{imported.ResourceID})
 	if len(refs[imported.ResourceID]) != 1 {
 		t.Fatalf("missing deletion protection: %+v", refs)
@@ -241,12 +252,38 @@ func TestCanvasAppearanceValidation(t *testing.T) {
 		func(v *CanvasAppearance) { v.AgentName = "小\x00鱼" },
 		func(v *CanvasAppearance) { v.AvatarHeight = 1000 },
 		func(v *CanvasAppearance) { v.AvatarType = "invalid" },
-		func(v *CanvasAppearance) { v.AvatarType = "live2d" },
+		func(v *CanvasAppearance) { v.AvatarType = "live2d"; v.Live2DSource = "custom" },
+		func(v *CanvasAppearance) { v.Live2DSource = "invalid" },
+		func(v *CanvasAppearance) { v.Live2DBuiltinModel = "../nito" },
 	} {
 		value := defaultCanvasAppearance()
 		mutate(&value)
 		if _, err := normalizeCanvasAppearance(value); err == nil {
 			t.Fatalf("invalid value accepted: %+v", value)
 		}
+	}
+}
+
+func TestBuiltinLive2DAppearanceSave(t *testing.T) {
+	svc, _, _, admin := newAppearanceTestService(t)
+	for _, name := range []string{"nito", "nico", "nietzsche", "ni-j", "nipsilon"} {
+		value := defaultAppearanceSetting()
+		value.Canvas.AvatarType = "live2d"
+		value.Canvas.Live2DSource = "builtin"
+		value.Canvas.Live2DBuiltinModel = name
+		saved, err := svc.UpdateAppearance(admin, value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if saved.Public.Canvas.Live2DSource != "builtin" || saved.Public.Canvas.Live2DBuiltinModel != name || saved.Public.Canvas.Live2DResourceID != "" {
+			t.Fatalf("wrong builtin projection: %+v", saved.Public.Canvas)
+		}
+		_, restored, err := svc.readAppearance()
+		if err != nil || restored.Canvas.Live2DBuiltinModel != name {
+			t.Fatalf("builtin selection was not persisted: %+v %v", restored.Canvas, err)
+		}
+	}
+	if _, err := svc.UpdateAppearance(nil, defaultAppearanceSetting()); err == nil {
+		t.Fatal("anonymous appearance update accepted")
 	}
 }

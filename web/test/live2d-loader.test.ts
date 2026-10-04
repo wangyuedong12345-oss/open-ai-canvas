@@ -28,7 +28,7 @@ test("Live2D loader restricts credentialed URLs, propagates failures and aborts 
     const context = { url, type: "json" } as Live2DLoaderContext;
     await run(context);
     expect(context.result).toEqual({ Version: 3 });
-    for (const unsafe of ["https://evil.example" + url, "/api/admin/users", "//evil.example/model.json"]) {
+    for (const unsafe of ["https://evil.example" + url, "/api/admin/users", "//evil.example/model.json", "/live2d/models/unknown/model.json", "/live2d/models/nito/../unknown/model.json", "https://evil.example/live2d/models/nito/nito.model3.json"]) {
         await expect(run({ url: unsafe, type: "json" })).rejects.toThrow("本站模型接口");
     }
     expect(requests).toBe(1);
@@ -44,4 +44,17 @@ test("Live2D loader restricts credentialed URLs, propagates failures and aborts 
     target.emit("destroy");
     await expect(pending).rejects.toThrow("aborted");
     expect(target.listenerCount("destroy")).toBe(0);
+});
+
+test("builtin models load from the exact same-origin model directories", async () => {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { href: "https://canvas.example/admin" } } });
+    const loader = { middlewares: [] } as unknown as typeof Live2DLoader;
+    installLive2DLoader(loader);
+    globalThis.fetch = (async (_url: unknown, options: RequestInit) => {
+        expect(options.credentials).toBe("same-origin");
+        return new Response('{"Version":3}');
+    }) as typeof fetch;
+    const context = { url: "/live2d/models/nico/nico.model3.json", type: "json" } as Live2DLoaderContext;
+    await loader.middlewares[0](context, async () => {});
+    expect(context.result).toEqual({ Version: 3 });
 });

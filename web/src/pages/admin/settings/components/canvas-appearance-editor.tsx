@@ -1,11 +1,11 @@
 import { useRef, useState } from "react";
-import { Alert, App, Button, Form, Input, InputNumber, Radio } from "antd";
+import { Alert, App, Button, Form, Input, InputNumber, Radio, Select } from "antd";
 import { ExternalLink, Upload } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Live2DAvatar } from "@/components/canvas/live2d-avatar";
-import { FluidOrb } from "@/components/ui/fluid-orb";
-import { agentCopy, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
-import { live2DModelURL, uploadLive2D } from "@/services/api/appearance";
+import { StudyCharacter } from "@/components/ui/study-character";
+import { agentCopy, BUILTIN_LIVE2D_MODELS, builtinLive2DModel, live2DSource, type BuiltinLive2DModel, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
+import { agentLive2DModelURL, builtinLive2DModelURL, uploadLive2D } from "@/services/api/appearance";
 
 export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading }: { value: CanvasAppearance; onChange: (value: CanvasAppearance) => void; disabled: boolean; onUploading: (value: boolean) => void }) {
     const { message } = App.useApp();
@@ -15,7 +15,9 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
     const [readyURL, setReadyURL] = useState("");
     const [error, setError] = useState("");
     const [attempt, setAttempt] = useState(0);
-    const url = value.live2dResourceId ? live2DModelURL(value.live2dResourceId, value.live2dEntry, true) : "";
+    const url = agentLive2DModelURL(value, true);
+    const source = live2DSource(value);
+    const builtinModel = builtinLive2DModel(value);
     const change = (patch: Partial<CanvasAppearance>) => onChange({ ...value, ...patch });
     async function upload(file?: File) {
         if (!file) return;
@@ -29,7 +31,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
         try {
             const model = await uploadLive2D(file);
             setReadyURL("");
-            change({ live2dResourceId: model.resourceId, live2dEntry: model.entry, avatarType: "orb" });
+            change({ live2dResourceId: model.resourceId, live2dEntry: model.entry, live2dSource: "custom", avatarType: "orb" });
             message.success("导入成功，请预览后选择 Live2D，并点击页面顶部保存");
         } catch (cause) {
             message.error(cause instanceof Error ? cause.message : "模型导入失败");
@@ -68,9 +70,26 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                     onChange={(event) => change({ avatarType: event.target.value })}
                     options={[
                         { label: "默认动态球", value: "orb" },
-                        { label: "Live2D", value: "live2d", disabled: !url || readyURL !== url },
+                        { label: "Live2D", value: "live2d" },
                     ]}
                 />
+                {value.avatarType === "live2d" ? (
+                    <Select
+                        aria-label="选择 Live2D 形象"
+                        className="w-56 max-w-full"
+                        value={source === "custom" ? "custom" : builtinModel}
+                        disabled={disabled || uploading}
+                        options={[
+                            { label: "内置形象", options: BUILTIN_LIVE2D_MODELS.map((model) => ({ label: model, value: model })) },
+                            ...(value.live2dResourceId ? [{ label: "自定义形象", options: [{ label: "自定义模型（已导入）", value: "custom" }] }] : []),
+                        ]}
+                        onChange={(model: BuiltinLive2DModel | "custom") => {
+                            setReadyURL("");
+                            setError("");
+                            change(model === "custom" ? { live2dSource: "custom" } : { live2dSource: "builtin", live2dBuiltinModel: model });
+                        }}
+                    />
+                ) : null}
                 <p className="text-sm text-foreground/60">上传有授权的 Cubism 3/4 运行时 ZIP：一个 model3.json、moc3、PNG 纹理及可选动作/表情 JSON。首期不支持音频、旧版模型和编辑工程。模型会发送到浏览器，无法保证防下载。</p>
                 <div className="grid gap-2 text-sm">
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -102,11 +121,11 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                     <Button icon={<Upload className="size-4" />} loading={uploading} disabled={disabled} onClick={() => input.current?.click()}>
                         导入 Live2D 模型（最大 128 MiB）
                     </Button>
-                    {url ? (
+                    {value.live2dResourceId ? (
                         <Button
                             disabled={disabled || uploading}
                             onClick={() => {
-                                change({ avatarType: "orb", live2dResourceId: "", live2dEntry: "" });
+                                change({ avatarType: "orb", live2dSource: "builtin", live2dResourceId: "", live2dEntry: "" });
                                 setError("");
                             }}
                         >
@@ -121,25 +140,29 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                 </label>
                 <div className="grid justify-items-center gap-3 rounded-xl border border-border bg-background p-5" aria-label="Agent 形象预览">
                     {url ? (
-                        <Live2DAvatar
-                            key={`${url}-${attempt}`}
-                            url={url}
-                            width={Math.round(value.avatarHeight * 0.75)}
-                            height={value.avatarHeight}
-                            reducedMotion={reducedMotion}
-                            fallback={<FluidOrb size={60} color="#7164f6" />}
-                            onReady={() => {
-                                setReadyURL(url);
-                                setError("");
-                            }}
-                            onError={(reason) => {
-                                setReadyURL("");
-                                setError(reason);
-                            }}
-                        />
-                    ) : (
-                        <FluidOrb size={60} color="#7164f6" />
-                    )}
+                        <div hidden={value.avatarType !== "live2d"}>
+                            <Live2DAvatar
+                                key={`${url}-${attempt}`}
+                                url={url}
+                                fallbackURL={source === "custom" ? builtinLive2DModelURL(builtinModel) : undefined}
+                                width={Math.round(value.avatarHeight * 0.75)}
+                                height={value.avatarHeight}
+                                reducedMotion={reducedMotion}
+                                fallback={<StudyCharacter size={60} />}
+                                onReady={() => {
+                                    setReadyURL(url);
+                                    setError("");
+                                }}
+                                onError={(reason) => {
+                                    setReadyURL("");
+                                    setError(reason);
+                                }}
+                            />
+                        </div>
+                    ) : null}
+                    {value.avatarType !== "live2d" || !url ? (
+                        <StudyCharacter size={60} />
+                    ) : null}
                     <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
                     <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>
                     {url ? <small>{readyURL === url ? "预览已就绪，可选择 Live2D 并保存启用" : "等待模型预览就绪"}</small> : null}

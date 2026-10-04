@@ -253,7 +253,7 @@ func (s *Service) Live2DAsset(actor *model.User, id, name string) ([]byte, strin
 	if err != nil || resource.Kind != "live2d" || resource.Provider != "local" || resource.Status != model.ResourceStatusReady {
 		return nil, "", BadAuthRequest("模型资源不可用")
 	}
-	if appearance.Canvas.AvatarType != "live2d" || appearance.Canvas.Live2DResourceID != id {
+	if appearance.Canvas.AvatarType != "live2d" || appearance.Canvas.Live2DSource == "builtin" || appearance.Canvas.Live2DResourceID != id {
 		if err := s.RequireAdmin(actor); err != nil {
 			return nil, "", err
 		}

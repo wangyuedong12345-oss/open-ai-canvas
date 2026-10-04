@@ -5,14 +5,14 @@
 
 import type { CanvasTheme } from "@/lib/canvas-theme";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
-import { agentCopy, DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
+import { agentCopy, builtinLive2DModel, DEFAULT_CANVAS_APPEARANCE } from "@/lib/canvas/agent-appearance";
 import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAgentLauncherPosition } from "./use-agent-launcher-position";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Live2DAvatar } from "./live2d-avatar";
-import { live2DModelURL } from "@/services/api/appearance";
-import { FluidOrb } from "@/components/ui/fluid-orb";
+import { agentLive2DModelURL, builtinLive2DModelURL } from "@/services/api/appearance";
+import { StudyCharacter } from "@/components/ui/study-character";
 import { ArrowLeft, Check, CircleDot, Clock3, Download, History, LoaderCircle, MessageSquarePlus, RotateCcw, Settings2, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { Button, Dropdown, Input, Popover } from "antd";
 import type { AgentContextPhase, AgentContextUsageView } from "@/lib/canvas/agent-context-usage";
@@ -36,7 +36,8 @@ import type { ApprovalState } from "./canvas-cloud-agent-events";
 // 否则每次重新挂载都要重新下载模型并重建渲染上下文，期间只能显示默认形象。
 export function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, hidden = false, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; hidden?: boolean; onOpen: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
-    const live = appearance.avatarType === "live2d" && Boolean(appearance.live2dResourceId && appearance.live2dEntry);
+    const modelURL = agentLive2DModelURL(appearance);
+    const live = appearance.avatarType === "live2d" && Boolean(modelURL);
     const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
     useEffect(() => {
         const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
@@ -62,9 +63,9 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
         >
             {live ? (
-                <Live2DAvatar url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)} width={width} height={height} reducedMotion={reducedMotion} fallback={<FluidOrb size={60} color="#7164f6" />} />
+                <Live2DAvatar key={modelURL} url={modelURL} fallbackURL={builtinLive2DModelURL(builtinLive2DModel(appearance))} width={width} height={height} reducedMotion={reducedMotion} fallback={<StudyCharacter size={60} />} />
             ) : (
-                <FluidOrb size={60} color="#7164f6" />
+                <StudyCharacter size={60} />
             )}
             {live ? (
                 <span className="canvas-agent-launcher-label" style={{ "--canvas-agent-status-color": statusColor } as CSSProperties}>

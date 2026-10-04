@@ -1,0 +1,5 @@
+Bundled Live2D runtime model data: nito, nico, nietzsche, ni-j, nipsilon.
+The project owner supplied these runtime archives for use as built-in avatars.
+The original runtime file paths and model content are preserved.
+Model assets have their own applicable usage and distribution terms;
+the project's code license does not grant a license to these model assets.

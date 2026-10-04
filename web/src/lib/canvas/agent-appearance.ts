@@ -1,3 +1,6 @@
+export const BUILTIN_LIVE2D_MODELS = ["nito", "nico", "nietzsche", "ni-j", "nipsilon"] as const;
+export type BuiltinLive2DModel = (typeof BUILTIN_LIVE2D_MODELS)[number];
+
 export type CanvasAppearance = {
     agentName: string;
     launcherLabel: string;
@@ -8,6 +11,8 @@ export type CanvasAppearance = {
     avatarType: "orb" | "live2d";
     live2dResourceId: string;
     live2dEntry: string;
+    live2dSource?: "builtin" | "custom";
+    live2dBuiltinModel?: BuiltinLive2DModel;
     avatarHeight: number;
 };
 
@@ -21,8 +26,17 @@ export const DEFAULT_CANVAS_APPEARANCE: CanvasAppearance = {
     avatarType: "orb",
     live2dResourceId: "",
     live2dEntry: "",
+    live2dBuiltinModel: "nito",
     avatarHeight: 220,
 };
+
+export function live2DSource(appearance: CanvasAppearance) {
+    return appearance.live2dSource || (appearance.live2dResourceId ? "custom" : "builtin");
+}
+
+export function builtinLive2DModel(appearance: CanvasAppearance): BuiltinLive2DModel {
+    return appearance.live2dBuiltinModel || "nito";
+}
 
 export function agentCopy(template: string, name: string) {
     return template.replaceAll("{agentName}", () => name);

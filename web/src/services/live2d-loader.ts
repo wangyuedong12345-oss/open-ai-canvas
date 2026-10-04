@@ -1,10 +1,11 @@
 import type { Live2DLoader as Loader } from "pixi-live2d-display/cubism4";
 import { apiBaseURL } from "@/services/api/request";
+import { BUILTIN_LIVE2D_MODELS } from "@/lib/canvas/agent-appearance";
 
 const installed = new WeakSet<typeof Loader>();
 
 // The SDK's default XHR loader omits cross-origin cookies and has no deadline.
-// Restrict credentialed requests to our own model API, never model-provided hosts.
+// Restrict requests to our model API and the bundled model directories.
 export function installLive2DLoader(loader: typeof Loader) {
     if (installed.has(loader)) return;
     installed.add(loader);
@@ -12,7 +13,9 @@ export function installLive2DLoader(loader: typeof Loader) {
         const base = new URL(`${apiBaseURL.replace(/\/$/, "")}/`, window.location.href);
         const url = new URL(context.settings ? context.settings.resolveURL(context.url) : context.url, window.location.href);
         const allowed = ["public", "admin/settings"].some((prefix) => url.pathname.startsWith(`${base.pathname}${prefix}/appearance/live2d/`));
-        if (url.origin !== base.origin || !allowed) throw new Error("Live2D 资源必须来自本站模型接口");
+        const staticBase = new URL(`${import.meta.env.BASE_URL || "/"}live2d/models/`, window.location.href);
+        const builtin = url.origin === staticBase.origin && BUILTIN_LIVE2D_MODELS.some((model) => url.pathname.startsWith(`${staticBase.pathname}${model}/`));
+        if (!builtin && (url.origin !== base.origin || !allowed)) throw new Error("Live2D 资源必须来自本站模型接口或内置模型目录");
         const controller = new AbortController();
         const abort = () => controller.abort();
         const deadline = setTimeout(abort, 20000);
@@ -20,7 +23,7 @@ export function installLive2DLoader(loader: typeof Loader) {
         const target = context.target as { once(event: "destroy", listener: () => void): unknown; off(event: "destroy", listener: () => void): unknown } | undefined;
         target?.once("destroy", abort);
         try {
-            const response = await fetch(url, { credentials: "include", signal: controller.signal });
+            const response = await fetch(url, { credentials: builtin ? "same-origin" : "include", signal: controller.signal });
             if (!response.ok) throw new Error(`Live2D 资源加载失败（${response.status}）`);
             context.result = context.type === "json" ? await response.json() : await response.arrayBuffer();
         } finally {

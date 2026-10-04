@@ -111,7 +111,9 @@ docker compose -f docker-compose.deploy.yml up -d backend web
 
 ## 平台外观配置
 
-当前外观 JSON 合同版本为 8，主题参数新增 `skinThemes[].tokens.buttons.light/dark`：填充模式、角度、常态/悬停/按下双色和文字色。经典主题默认为紫蓝渐变，其余旧主题缺少此块时保持纯色；公开 `activeSkin` 使用相同结构。无表结构迁移，读取补齐只在内存执行，管理员保存时写回。回退应用版本前保留外观 JSON 备份，旧版本不支持新按钮填充参数。
+画布 Agent 配置保存在 `appearance` JSON 的 `canvas` 中，`live2dSource`（`builtin|custom`）区分当前模型来源，`live2dBuiltinModel` 记录选中的内置形象及自定义加载失败的兜底模型。内置模型随前端静态文件发布，不创建 `resources` 记录；保留的 `live2dResourceId` 仍参与资源删除保护。此扩展不新增列、表或结构迁移。
+
+当前外观 JSON 合同版本为 9。版本 8 为主题参数新增 `skinThemes[].tokens.buttons.light/dark`：填充模式、角度、常态/悬停/按下双色和文字色。经典主题默认为紫蓝渐变，其余旧主题缺少此块时保持纯色；公开 `activeSkin` 使用相同结构。无表结构迁移，读取补齐只在内存执行，管理员保存时写回。回退应用版本前保留外观 JSON 备份，旧版本不支持新按钮填充参数。
 
 平台外观复用既有 `system_settings` 表，不新增结构迁移。键 `appearance` 的 JSON 值使用版本化合同；版本 3 保存品牌名称、英文品牌标识、登录页主标题与可选说明文案、浅色与可选深色 Logo 资源 ID、Logo 外框开关、登录页视频资源 ID、可选封面资源 ID 和预留皮肤 ID。只配置一套 Logo 时，公开投影会在浅色和深色主题复用同一资源；旧版本缺少深色 Logo 与外框字段时分别回退到单 Logo 和启用外框，不改变既有视觉。资源元数据和文件仍分别由 `resources` 表与当前资源存储承担。恢复默认外观时删除这条设置记录并回到内置值，不级联删除已经上传的资源。
 
