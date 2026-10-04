@@ -70,7 +70,8 @@
     .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-topbar {
         left: 0;
     }
-    .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-workspace-zoom-controls {
+    .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-workspace-zoom-controls,
+    .canvas-main-with-workspace:has(> .canvas-project-sidebar) .canvas-workspace-minimap {
         left: var(--canvas-inset-x);
     }
 }
@@ -83,7 +84,8 @@
 .canvas-main-with-workspace .canvas-topbar {
     left: var(--canvas-workspace-inset);
 }
-.canvas-main-with-workspace .canvas-workspace-zoom-controls {
+.canvas-main-with-workspace .canvas-workspace-zoom-controls,
+.canvas-main-with-workspace .canvas-workspace-minimap {
     left: calc(var(--canvas-workspace-inset) + var(--canvas-inset-x));
 }
 .canvas-workspace-shell {
