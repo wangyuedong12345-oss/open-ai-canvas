@@ -1,13 +1,14 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { getWelcomeAvailability } from "@/services/api/welcome";
+import { bootstrapAppearance } from "@/services/appearance-bootstrap";
 import { bootWorkspace } from "@/lib/workspace-boot";
 import WelcomePage from "@/pages/welcome";
 
 async function renderWelcome() {
     const atRoot = window.location.pathname === "/";
     try {
-        const { welcomeEnabled } = await getWelcomeAvailability();
+        const [{ welcomeEnabled }] = await Promise.all([getWelcomeAvailability(), bootstrapAppearance()]);
         if (welcomeEnabled !== true) {
             // 开关关闭：根路径直接回落工作台；/welcome 跳回根路径，由其自行判断降级。
             if (atRoot) bootWorkspace();

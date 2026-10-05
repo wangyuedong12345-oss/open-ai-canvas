@@ -125,7 +125,11 @@ export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocu
         favicon.rel = "icon";
         targetDocument.head.appendChild(favicon);
     }
-    favicon.href = appearanceLogoURL(appearance, targetDocument.documentElement.classList.contains("dark") ? "dark" : "light");
+    const darkLogo = appearanceLogoURL(appearance, "dark");
+    favicon.href = darkLogo;
+    void createDarkFavicon(darkLogo, targetDocument).then((dataURL) => {
+        if (dataURL && favicon?.isConnected) favicon.href = dataURL;
+    });
 
     const location = targetDocument.defaultView?.location;
     if (location && (location.protocol === "http:" || location.protocol === "https:")) {
@@ -136,6 +140,39 @@ export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocu
             targetDocument.head.appendChild(canonical);
         }
         canonical.href = `${location.origin}${location.pathname}`;
+    }
+}
+
+async function createDarkFavicon(source: string, targetDocument: Document) {
+    const view = targetDocument.defaultView;
+    if (!view) return null;
+
+    try {
+        const image = new view.Image();
+        image.crossOrigin = "anonymous";
+        const loaded = new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error("Unable to load favicon logo"));
+        });
+        image.src = source;
+        await loaded;
+
+        const canvas = targetDocument.createElement("canvas");
+        canvas.width = 64;
+        canvas.height = 64;
+        const context = canvas.getContext("2d");
+        if (!context) return null;
+        const scale = Math.min(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
+        const width = image.naturalWidth * scale;
+        const height = image.naturalHeight * scale;
+        context.drawImage(image, (canvas.width - width) / 2, (canvas.height - height) / 2, width, height);
+        context.globalCompositeOperation = "source-in";
+        context.fillStyle = "#17161c";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/png");
+    } catch (error) {
+        console.warn("Failed to create a dark favicon from the configured logo", error);
+        return null;
     }
 }
 

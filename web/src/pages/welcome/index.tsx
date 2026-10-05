@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { ArrowUpRight } from "lucide-react";
 
 import { MiooCharacter } from "@/lib/mioo-character/mioo-character";
@@ -6,10 +5,6 @@ import { MiooCharacter } from "@/lib/mioo-character/mioo-character";
 import "./welcome.css";
 
 export default function WelcomePage() {
-    useEffect(() => {
-        document.title = "FRAMIND · 让想象化作影像";
-    }, []);
-
     return (
         <div className="welcome-page">
             <div className="welcome-stage">

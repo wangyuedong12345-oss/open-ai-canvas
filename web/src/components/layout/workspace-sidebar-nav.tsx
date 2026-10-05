@@ -41,15 +41,15 @@ function buildNav(features: FeatureAvailability, isAdmin: boolean): { groups: Wo
         {
             items: [
                 { ...toolItem("create", "/"), id: "home", title: "创作" },
-                { ...toolItem("projects", "/projects"), title: "短剧 Agent" },
-                { ...toolItem("canvas", "/canvas"), title: "自由画布" },
+                { ...toolItem("projects", "/projects"), title: "短剧" },
+                { ...toolItem("canvas", "/canvas"), title: "画布" },
             ],
         },
         {
             heading: "资源与工具",
             items: [{ ...toolItem("assets", "/assets"), title: "资产" }, { ...toolItem("skills", "/skills"), title: "技能" }, ...(features.pluginCenterEnabled || isAdmin ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : [])],
         },
-        ...(features.taskCenterEnabled ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: "创作历史", icon: HistoryIcon }] }] : []),
+        ...(features.taskCenterEnabled ? [{ items: [{ ...toolItem("tasks", "/tasks"), title: "历史", icon: HistoryIcon }] }] : []),
     ];
 
     // 管理、设置和退出登录不再占据参考站式侧栏底部，而是通过用户卡片菜单进入。
