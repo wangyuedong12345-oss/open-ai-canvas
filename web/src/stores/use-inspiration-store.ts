@@ -8,7 +8,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { catalogIdOf, type CreationInspiration, type InspirationSourceId } from "@/lib/inspirations/catalog";
+import { catalogIdOf, type CreationInspiration } from "@/lib/inspirations/catalog";
 import { CUSTOM_ID_PREFIX, isCustomInspiration, type InspirationOverride } from "@/lib/inspirations/resolve";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 
@@ -101,7 +101,7 @@ function normalizeImportedEntry(input: unknown): CreationInspiration | null {
         return {
             ...draft,
             id: id.startsWith(CUSTOM_ID_PREFIX) ? id : `${CUSTOM_ID_PREFIX}${id}`,
-            sourceId: (typeof raw.sourceId === "string" ? raw.sourceId : "original") as InspirationSourceId,
+            sourceId: "custom",
             ...(typeof raw.credit === "string" && raw.credit.trim() ? { credit: raw.credit.trim() } : {}),
             ...(typeof raw.sourceUrl === "string" && raw.sourceUrl.trim() ? { sourceUrl: raw.sourceUrl.trim() } : {}),
         };
@@ -121,7 +121,7 @@ export const useInspirationStore = create<InspirationStore>()(
 
             createEntry: (draft) => {
                 const id = `${CUSTOM_ID_PREFIX}${crypto.randomUUID()}`;
-                const entry: CreationInspiration = { ...normalizeDraft(draft), id, sourceId: "original" };
+                const entry: CreationInspiration = { ...normalizeDraft(draft), id, sourceId: "custom" };
                 set((state) => ({ custom: [entry, ...state.custom] }));
                 return id;
             },

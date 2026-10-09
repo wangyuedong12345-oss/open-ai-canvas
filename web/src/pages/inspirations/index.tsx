@@ -25,7 +25,7 @@ type SortKey = "default" | "title";
 type CategoryChoice = InspirationCategoryChoice & { count: number };
 
 /** 来源筛选的顺序。必须覆盖 inspirationSources 里全部有内容的来源，漏掉就会有条目筛不到。 */
-const SOURCE_ORDER: InspirationSourceId[] = ["original", "chatgpt-prompts", "seedance", "haohaoxue", "youmind"];
+const SOURCE_ORDER: InspirationSourceId[] = ["haohaoxue", "youmind", "custom"];
 const VIEW_OPTIONS: { label: string; value: ViewFilter }[] = [
     { label: "全部", value: "all" },
     { label: "收藏", value: "favorites" },
@@ -128,7 +128,7 @@ export default function InspirationsPage() {
         (item: CreationInspiration) => {
             const code = item.category?.trim();
             if (!code) return "未分类";
-            return categoryLabels.get(item.sourceId ?? "original")?.get(code) ?? code;
+            return categoryLabels.get(item.sourceId ?? "custom")?.get(code) ?? code;
         },
         [categoryLabels],
     );
@@ -151,7 +151,7 @@ export default function InspirationsPage() {
         const counts = new Map<SourceFilter, number>();
         counts.set("all", resolved.length + hiddenItems.length);
         for (const item of [...resolved, ...hiddenItems]) {
-            const key = item.sourceId ?? "original";
+            const key = item.sourceId ?? "custom";
             counts.set(key, (counts.get(key) ?? 0) + 1);
         }
         return counts;
@@ -164,7 +164,7 @@ export default function InspirationsPage() {
         const favoriteSet = new Set(favorites);
         for (const item of pool) {
             if (view === "favorites" && !favoriteSet.has(catalogIdOf(item))) continue;
-            if (source !== "all" && (item.sourceId ?? "original") !== source) continue;
+            if (source !== "all" && (item.sourceId ?? "custom") !== source) continue;
             counts.all += 1;
             counts[item.mode] += 1;
         }
@@ -187,7 +187,7 @@ export default function InspirationsPage() {
         const favoriteSet = new Set(favorites);
         const filtered = pool.filter((item) => {
             if (view === "favorites" && !favoriteSet.has(catalogIdOf(item))) return false;
-            if (source !== "all" && (item.sourceId ?? "original") !== source) return false;
+            if (source !== "all" && (item.sourceId ?? "custom") !== source) return false;
             if (modeFilter !== "all" && item.mode !== modeFilter) return false;
             if (category !== "all" && (item.category?.trim() ?? "") !== category) return false;
             if (!keyword) return true;

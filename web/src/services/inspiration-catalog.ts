@@ -5,7 +5,7 @@
  * 首页纵深画廊的池子同理，连提示词正文有几百 KB，走 gallery-pool.json，
  * 浏览器 HTTP 缓存之外再做一层内存缓存，同一次会话只请求一遍。
  */
-import { curatedInspirations, type CreationInspiration, type InspirationSourceId } from "@/lib/inspirations/catalog";
+import { type CreationInspiration, type InspirationSourceId } from "@/lib/inspirations/catalog";
 
 /** manifest.json 里每个来源带的分类码译名表。 */
 type SourceManifest = { revision?: string; count?: number; categories?: Record<string, string> };
@@ -28,7 +28,6 @@ export type InspirationCatalog = {
 };
 
 const CATALOG_SOURCES: { key: InspirationSourceId; file: string }[] = [
-    { key: "seedance", file: "/inspirations/seedance.json" },
     { key: "haohaoxue", file: "/inspirations/haohaoxue.json" },
     { key: "youmind", file: "/inspirations/youmind.json" },
 ];
@@ -57,9 +56,8 @@ async function buildCatalog(): Promise<InspirationCatalog> {
 
     const entriesBySource = new Map<InspirationSourceId, CreationInspiration[]>();
     CATALOG_SOURCES.forEach((source, index) => entriesBySource.set(source.key, packs[index]));
-    entriesBySource.set("original", curatedInspirations);
 
-    const categoriesBySource = {} as Record<InspirationSourceId, InspirationCategoryOption[]>;
+    const categoriesBySource: Record<InspirationSourceId, InspirationCategoryOption[]> = { custom: [], haohaoxue: [], youmind: [] };
     const revisions: Record<string, string> = {};
     for (const [sourceId, sourceEntries] of entriesBySource) {
         if (manifest.sources?.[sourceId]?.revision) revisions[sourceId] = manifest.sources[sourceId]!.revision!;
@@ -98,16 +96,16 @@ let galleryPool: Promise<CreationInspiration[]> | null = null;
 
 /**
  * 池子有几百条、几百 KB，是全量目录之外的单独一份，只服务画廊一处。
- * 拿不到就退回打包的原创条目——画廊宁可少几张，也不该空着。
+ * 加载失败时隐藏画廊，保留创作输入框和其他入口。
  */
 export function loadGalleryPool(): Promise<CreationInspiration[]> {
     if (!galleryPool) {
         galleryPool = fetchJson<unknown>(GALLERY_POOL_FILE)
-            .then((payload) => [...curatedInspirations, ...readEntries(payload, GALLERY_POOL_FILE)])
+            .then((payload) => readEntries(payload, GALLERY_POOL_FILE))
             .catch((error) => {
-                console.warn("画廊池加载失败，退回打包的原创条目", error);
+                console.warn("画廊池加载失败", error);
                 galleryPool = null;
-                return curatedInspirations;
+                return [];
             });
     }
     return galleryPool;

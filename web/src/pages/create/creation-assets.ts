@@ -6,6 +6,7 @@ import type { ExternalAssetPickerReference } from "@/lib/plugins/plugin-types";
 import type { Asset, AudioAsset, ImageAsset, NewAsset } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
+import type { AssetLibraryPickerItem } from "@/components/assets/asset-library-picker-modal";
 
 export type CreationDocumentAttachment = {
     id: string;
@@ -20,6 +21,21 @@ export type CreationAttachment = ((ReferenceImage | ReferenceVideo | ReferenceAu
 import type { CreationMode } from "@/lib/creation-mode";
 
 export type { CreationMode };
+
+export function creationAttachmentsFromLibrarySelection(ids: string[], items: AssetLibraryPickerItem[]): CreationAttachment[] {
+    const byId = new Map(items.map((item) => [item.id, item]));
+    return ids.map((id) => {
+        const item = byId.get(id);
+        if (!item) throw new Error("所选素材已不存在，请刷新素材库后重试");
+        if (item.disabledReason) throw new Error(item.disabledReason);
+        if (item.external) return creationAttachmentFromExternalAsset(item.external);
+        const asset = item.asset;
+        if (asset?.kind === "image") return creationAttachmentFromAsset(asset);
+        if (asset?.kind === "video") return creationAttachmentFromVideoAsset(asset);
+        if (asset?.kind === "audio") return creationAttachmentFromAudioAsset(asset);
+        throw new Error("此素材不支持作为创作参考内容");
+    });
+}
 export type CreationAttachmentKind = "image" | "video" | "audio" | "file";
 
 const textDocumentExtensions = [".pdf", ".txt", ".md", ".csv", ".json", ".html", ".xml", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"];

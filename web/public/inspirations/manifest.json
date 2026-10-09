@@ -1,39 +1,6 @@
 {
     "generatedAt": "2026-10-08T05:02:18.039Z",
     "sources": {
-        "seedance": {
-            "revision": "487c166e2f09487016452b90fec5e19a470af883",
-            "count": 767,
-            "categories": {
-                "handheld-ugc-vlog": "手持 UGC Vlog",
-                "anime-style-lock": "动漫风格锁定",
-                "meme-comedy": "梗图喜剧",
-                "combat-choreography": "打斗编排",
-                "storyboard-grid-to-video": "分镜表转视频",
-                "character-reference-lock": "角色一致性",
-                "time-freeze-rewind": "时间冻结与倒放",
-                "cinematic-narrative-short": "电影感叙事短片",
-                "car-vehicle": "汽车与载具",
-                "sports-extreme": "运动极限",
-                "travel-city-walk": "旅行城市漫步",
-                "process-transformation-montage": "过程变身蒙太奇",
-                "ugc-creator-review": "达人测评",
-                "fashion-lookbook": "时尚造型册",
-                "pet-animal": "宠物与动物",
-                "3d-cartoon": "3D 卡通",
-                "timeline-shot-script": "时间轴分镜脚本",
-                "product-commercial-shotlist": "产品广告分镜",
-                "stop-motion-cadence": "定格动画节奏",
-                "epic-fantasy-scifi": "史诗奇幻科幻",
-                "dialogue-performance-beats": "对白表演节拍",
-                "music-beat-sync-mv": "音乐卡点 MV",
-                "horror-suspense": "恐怖悬疑",
-                "pov-continuous-take": "POV 长镜头",
-                "game-ui-livestream": "游戏 UI 直播",
-                "food-asmr": "美食 ASMR",
-                "retro-found-footage": "复古伪纪录"
-            }
-        },
         "haohaoxue": {
             "revision": "2026-10-08",
             "count": 297,

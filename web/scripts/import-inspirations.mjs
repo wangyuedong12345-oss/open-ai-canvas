@@ -5,11 +5,11 @@
  * 产物分两层：
  *   - public/inspirations/*.json          全量目录（每个来源一个文件，按需拉取）
  *   - public/inspiration-thumbs/<来源>/*.webp  本地压缩缩略图，只给每个来源排在前面的若干条
- *   - src/lib/inspirations/highlights.ts  打进包里的精选，供首页纵深画廊即时渲染
+ *   - public/inspirations/gallery-pool.json 首页画廊精选池
  *
  * 用法：
- *   bun scripts/import-inspirations.mjs [--only seedance|haohaoxue|youmind] [--thumbs 120] [--force]
- *   bun scripts/import-inspirations.mjs --seedance-input <cases.json> --haohaoxue-input <prompts.html>
+ *   bun scripts/import-inspirations.mjs [--only haohaoxue|youmind] [--thumbs 120] [--force]
+ *   bun scripts/import-inspirations.mjs --haohaoxue-input <prompts.html>
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -23,7 +23,6 @@ const GALLERY_POOL_FILE = join(PUBLIC_DIR, "gallery-pool.json");
 const REVISIONS_FILE = join(WEB_DIR, "src", "lib", "inspirations", "source-revisions.ts");
 const UA = "Mozilla/5.0 (compatible; yingce-inspiration-import/1.0; +https://github.com/ddcat-ai/open-ai-canvas)";
 
-const SEEDANCE_REPO = "LearnPrompt/awesome-seedance";
 const HAOHAOXUE_PAGE = "https://www.haohaoxue.com/prompts/";
 /** YouMind 的提示词库，README 里已经是中文，且带分类、配图与作者。 */
 const YOUMIND_REPOS = [
@@ -45,47 +44,6 @@ const THUMB_QUALITY = 72;
 const MIN_THUMB_BYTES = 4000;
 const THUMB_DIR = "inspiration-thumbs";
 
-/**
- * 上游封面不可用的条目：封面本身是影片片头白板，画面上只有一个白底和 "MUDA / FILM 01"，
- * 放在画廊里就是一块空白。清单按 slug 写死，重新同步不会把它带回来。
- */
-const EXCLUDED_SEEDANCE_SLUGS = new Set(["seedance-make-a-modern-slick-and-punchy-video-for-a-modern-startup-that-works-on-infere-07ba4673539c"]);
-
-/**
- * 上游模板分类的中文标签。id 来自 awesome-seedance 的 data/case-taxonomy.json，
- * 它只给 id 不给名字，所以译名维护在这里；出现新 id 时会告警并在页面上回落成 id 本身。
- */
-const SEEDANCE_CATEGORY_LABELS = {
-    "handheld-ugc-vlog": "手持 UGC Vlog",
-    "anime-style-lock": "动漫风格锁定",
-    "meme-comedy": "梗图喜剧",
-    "combat-choreography": "打斗编排",
-    "storyboard-grid-to-video": "分镜表转视频",
-    "character-reference-lock": "角色一致性",
-    "time-freeze-rewind": "时间冻结与倒放",
-    "cinematic-narrative-short": "电影感叙事短片",
-    "car-vehicle": "汽车与载具",
-    "sports-extreme": "运动极限",
-    "travel-city-walk": "旅行城市漫步",
-    "process-transformation-montage": "过程变身蒙太奇",
-    "ugc-creator-review": "达人测评",
-    "fashion-lookbook": "时尚造型册",
-    "pet-animal": "宠物与动物",
-    "3d-cartoon": "3D 卡通",
-    "timeline-shot-script": "时间轴分镜脚本",
-    "product-commercial-shotlist": "产品广告分镜",
-    "stop-motion-cadence": "定格动画节奏",
-    "epic-fantasy-scifi": "史诗奇幻科幻",
-    "dialogue-performance-beats": "对白表演节拍",
-    "music-beat-sync-mv": "音乐卡点 MV",
-    "horror-suspense": "恐怖悬疑",
-    "pov-continuous-take": "POV 长镜头",
-    "game-ui-livestream": "游戏 UI 直播",
-    "food-asmr": "美食 ASMR",
-    "retro-found-footage": "复古伪纪录",
-};
-
-/** 好好学 AI 的分类码译名，取自站点「分类」筛选器上的中文标签。 */
 const HAOHAOXUE_CATEGORY_LABELS = {
     poster: "海报设计",
     portrait: "人像摄影",
@@ -101,12 +59,11 @@ const HAOHAOXUE_CATEGORY_LABELS = {
 };
 
 function parseArgs(argv) {
-    const options = { only: "", thumbs: 120, force: false, seedanceInput: "", haohaoxueInput: "" };
+    const options = { only: "", thumbs: 120, force: false, haohaoxueInput: "" };
     for (let index = 0; index < argv.length; index += 1) {
         const arg = argv[index];
         if (arg === "--only") options.only = argv[++index];
         else if (arg === "--thumbs") options.thumbs = Number(argv[++index]);
-        else if (arg === "--seedance-input") options.seedanceInput = argv[++index];
         else if (arg === "--haohaoxue-input") options.haohaoxueInput = argv[++index];
         else if (arg === "--force") options.force = true;
         else throw new Error(`未知参数: ${arg}`);
@@ -115,12 +72,6 @@ function parseArgs(argv) {
     if (options.only && !sourceNames.includes(options.only)) throw new Error(`--only 只支持 ${sourceNames.join(" / ")}，收到: ${options.only}`);
     if (!Number.isInteger(options.thumbs) || options.thumbs <= 0) throw new Error(`--thumbs 必须是正整数，收到: ${options.thumbs}`);
     return options;
-}
-
-const CJK = /[㐀-䶿一-鿿]/;
-
-function hasCjk(value) {
-    return CJK.test(value ?? "");
 }
 
 function clip(value, limit) {
@@ -145,77 +96,6 @@ async function downloadImage(url, target) {
     if (!response.ok) throw new Error(`下载封面失败 ${url}: HTTP ${response.status}`);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, Buffer.from(await response.arrayBuffer()));
-}
-
-// ── awesome-seedance ────────────────────────────────────────────────────────
-
-async function resolveSeedanceRevision() {
-    const response = await fetch(`https://api.github.com/repos/${SEEDANCE_REPO}/commits/main`, {
-        headers: { Accept: "application/vnd.github.sha", "User-Agent": UA },
-    });
-    if (!response.ok) throw new Error(`取 seedance revision 失败: HTTP ${response.status}`);
-    return (await response.text()).trim();
-}
-
-async function loadSeedance(options) {
-    if (options.seedanceInput) {
-        const text = readFileSync(resolve(options.seedanceInput), "utf8");
-        const parsed = JSON.parse(text);
-        return { revision: "local", raw: Array.isArray(parsed) ? parsed : parsed.cases };
-    }
-    const revision = await resolveSeedanceRevision();
-    const text = await fetchText(`https://raw.githubusercontent.com/${SEEDANCE_REPO}/${revision}/data/cases.json`);
-    const parsed = JSON.parse(text);
-    const taxonomy = JSON.parse(await fetchText(`https://raw.githubusercontent.com/${SEEDANCE_REPO}/${revision}/data/case-taxonomy.json`));
-    const raw = Array.isArray(parsed) ? parsed : parsed.cases;
-    if (!Array.isArray(raw)) throw new Error("seedance cases.json 结构不符合预期");
-    for (const item of raw) {
-        const template = taxonomy?.assignments?.[item.slug];
-        if (template) item.templateId = template;
-    }
-    return { revision, raw };
-}
-
-/**
- * 只收中文标题的条目；中文界面下英文标题读起来是噪音。
- */
-/**
- * 卡片的描述行。上游只有约四分之一条目的 summary 是中文，其余是英文原文，
- * 而且不少英文摘要里混着 "Created on Seedance 2.5 Prompt: …" 这类样板文字，
- * 塞进中文卡片是噪音；不拿标题顶上是因为标题和描述重复看着像渲染出错。
- * 所以退一步用上游分类的译名——同样是中文，同样说得清这条是什么，
- * 只是讲的是"哪一类"而不是"这一条讲了什么"。连分类都没有的少数条目留空。
- */
-function seedanceDescription(item, category) {
-    if (hasCjk(item.summary)) return clip(item.summary, DESCRIPTION_LIMIT);
-    return SEEDANCE_CATEGORY_LABELS[category] ?? "";
-}
-
-function buildSeedanceEntries(raw) {
-    const unknown = new Set();
-    const entries = raw
-        .filter((item) => item.slug && item.posterUrl && item.promptFull && hasCjk(item.title) && !EXCLUDED_SEEDANCE_SLUGS.has(item.slug))
-        .sort((left, right) => (right.heatScore ?? 0) - (left.heatScore ?? 0))
-        .map((item) => {
-            const category = item.templateId || "";
-            if (category && !SEEDANCE_CATEGORY_LABELS[category]) unknown.add(category);
-            return {
-                id: `seedance:${item.slug}`,
-                title: item.title,
-                description: seedanceDescription(item, category),
-                image: item.posterUrl,
-                mode: "video",
-                prompt: item.promptFull,
-                ...(category ? { category } : {}),
-                ...(Array.isArray(item.tags) && item.tags.length ? { tags: item.tags.slice(0, 6) } : {}),
-                sourceId: "seedance",
-                ...(item.creator ? { credit: item.creator } : {}),
-                ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
-                heat: item.heatScore ?? 0,
-            };
-        });
-    if (unknown.size) console.warn(`⚠ seedance 出现未译分类 id（页面会回落显示 id）: ${[...unknown].join(", ")}`);
-    return entries;
 }
 
 // ── 好好学 AI 提示词库 ──────────────────────────────────────────────────────
@@ -434,15 +314,6 @@ function pruneOrphanThumbs(source, keepNames) {
  * 各来源的加载与条目构造。加新来源时在这里加一项，main 只负责编排与落盘。
  */
 const SOURCE_PIPELINES = [
-    {
-        name: "seedance",
-        file: "seedance.json",
-        coverName: (entry) => sanitizeFileName(entry.id.replace(/^seedance:/, "")),
-        load: async (options) => {
-            const { revision, raw } = await loadSeedance(options);
-            return { revision, note: `上游 ${raw.length} 条`, entries: buildSeedanceEntries(raw), categories: SEEDANCE_CATEGORY_LABELS };
-        },
-    },
     {
         name: "haohaoxue",
         file: "haohaoxue.json",

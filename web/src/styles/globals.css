@@ -18241,22 +18241,28 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     flex: 1 1 auto !important;
 }
 .app-user-workspace .creation-home > .creation-empty-workspace {
-    display: block !important;
-    width: min(1680px, calc(100% - 72px)) !important;
+    display: flex !important;
+    flex-direction: column;
+    justify-content: safe center;
+    gap: var(--space-8);
+    width: min(960px, calc(100% - var(--space-12))) !important;
     height: 100% !important;
     max-width: none !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     overscroll-behavior: contain;
     scrollbar-width: none;
-    padding: 28px 0 56px !important;
+    padding: var(--space-12) 0 !important;
+    /* Compensate centered layout so the composer grows upward from its lower edge. */
+    padding-bottom: calc(var(--space-12) + var(--creation-prompt-growth, 0px)) !important;
 }
 .app-user-workspace .creation-home > .creation-empty-workspace::-webkit-scrollbar { display: none; width: 0; }
 
 /* Reference page order: title → mode tabs → large composer → quick actions → works. */
 .app-user-workspace .creation-home-heading {
     width: 100% !important;
-    margin: 0 auto 24px !important;
+    flex: 0 0 auto;
+    margin: 0 auto !important;
     text-align: center !important;
 }
 .app-user-workspace .creation-home-heading-mark {
@@ -18283,6 +18289,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     line-height: 1.5 !important;
 }
 .creation-launchpad {
+    flex: 0 0 auto;
     width: min(100%, 960px);
     margin-inline: auto;
     container-type: inline-size;
@@ -18393,11 +18400,37 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     border-radius: 22px !important;
 }
 .app-user-workspace .creation-launchpad .creation-chat-composer.is-empty .creation-chat-writing-surface {
-    min-height: 152px !important;
+    min-height: calc(224px + var(--creation-prompt-growth, 0px)) !important;
     padding: 22px 24px 10px !important;
 }
+.app-user-workspace .creation-launchpad .creation-chat-composer.is-empty .creation-chat-editor {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+.app-user-workspace .creation-launchpad .creation-chat-composer.is-empty .creation-chat-mention-container {
+    height: var(--creation-prompt-height, 136px);
+    min-height: 0;
+    flex: 0 0 var(--creation-prompt-height, 136px);
+}
 .app-user-workspace .creation-launchpad .creation-chat-composer.is-empty .creation-chat-mention-editor {
-    min-height: 64px !important;
+    height: 100%;
+    min-height: 0 !important;
+    max-height: 100%;
+    overflow-y: var(--creation-prompt-overflow, hidden) !important;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--user-ink-muted) transparent;
+    resize: none;
+    border: 0 !important;
+    border-radius: 0;
+    outline: 0;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
     font-size: 16px !important;
 }
 .app-user-workspace .creation-launchpad .creation-chat-dock {
@@ -18511,13 +18544,34 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
 .app-user-workspace .creation-thread-scroll { background: transparent; }
 .app-user-workspace .creation-thread-stage { padding-top: 16px; padding-bottom: 12px; }
 .app-user-workspace .creation-thread-composer { padding: 4px 0 10px; background: transparent; }
+.app-user-workspace .creation-chat-composer.is-thread {
+    min-height: calc(220px + var(--creation-prompt-growth, 0px));
+}
 .app-user-workspace .creation-chat-composer.is-thread .creation-chat-writing-surface {
+    flex: 1 1 auto;
     min-height: 0 !important;
     padding: 8px 12px 0 !important;
 }
+.app-user-workspace .creation-chat-composer.is-thread .creation-chat-mention-container {
+    height: var(--creation-prompt-height, 116px);
+    min-height: 0;
+}
 .app-user-workspace .creation-chat-composer.is-thread .creation-chat-editor textarea,
 .app-user-workspace .creation-chat-composer.is-thread .creation-chat-mention-editor {
-    min-height: 40px !important;
+    height: 100%;
+    min-height: 0 !important;
+    max-height: 100%;
+    overflow-y: var(--creation-prompt-overflow, hidden) !important;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--user-ink-muted) transparent;
+    resize: none;
+    border: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
     font-size: 14px !important;
     line-height: 1.55 !important;
 }
@@ -18587,7 +18641,7 @@ html:not(.dark) .creation-home .creation-user-message-copy-wrap { box-shadow: 0 
     .app-user-workspace .app-workspace-topbar-breadcrumb > span[aria-hidden] { display: none; }
     .app-user-workspace .app-workspace-topbar-breadcrumb { min-width: 0; white-space: nowrap; }
     .app-user-workspace .app-workspace-sidebar { width: 180px !important; }
-    .app-user-workspace .creation-home > .creation-empty-workspace { width: calc(100% - 24px) !important; padding-top: 28px !important; padding-bottom: 40px !important; }
+    .app-user-workspace .creation-home > .creation-empty-workspace { width: calc(100% - 24px) !important; padding-top: 28px !important; padding-bottom: calc(40px + var(--creation-prompt-growth, 0px)) !important; }
     .app-user-workspace .creation-home-heading h1 { font-size: 28px !important; }
     .app-user-workspace .creation-home-heading p { font-size: 14px !important; }
     .app-user-workspace .creation-launchpad > .creation-mode-capsule .creation-chat-control { min-width: 0 !important; padding-inline: 16px !important; }

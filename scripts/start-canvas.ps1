@@ -53,4 +53,4 @@ do {
     }
 } while ((Get-Date) -lt $deadline)
 
-throw "影策服务已拉起，但 3 分钟内未通过健康检查。请查看打开的前端、后端窗口。"
+throw "影策服务已拉起，但 3 分钟内未通过健康检查。请查看 .local/logs/dev-background 下的日志。"

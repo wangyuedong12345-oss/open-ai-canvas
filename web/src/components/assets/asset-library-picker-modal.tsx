@@ -55,6 +55,7 @@ type Props = {
     allowCharacters?: boolean;
     /** 调用方能处理 onConfirm 的 pickedItems 时设为 true：远端分页里不在本地缓存的素材也可选。 */
     acceptRemoteItems?: boolean;
+    getDisabledReason?: (asset: Asset) => string | undefined;
     /** 左侧「媒体类型」筛选项；只有一种类型或已由 remoteKind 固定时不展示该分组。 */
     mediaKinds?: AssetPickerMediaKind[];
     open: boolean;
@@ -98,6 +99,7 @@ export function AssetLibraryPickerModal({
     remoteKind,
     allowCharacters = false,
     acceptRemoteItems = false,
+    getDisabledReason,
     mediaKinds = DEFAULT_MEDIA_KINDS,
     open,
     items,
@@ -174,10 +176,11 @@ export function AssetLibraryPickerModal({
                         kindLabel: asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : asset.kind === "audio" ? "音频" : asset.kind === "entity" ? "角色" : "文本",
                         searchText: (asset.tags ?? []).join(" "),
                         ...(known || (acceptRemoteItems ? {} : { disabledReason: "此素材不适用于当前操作" })),
+                        ...(getDisabledReason ? { disabledReason: getDisabledReason(asset) } : {}),
                         asset,
                     };
                 }),
-        [acceptRemoteItems, allowCharacters, remoteQuery.data, items],
+        [acceptRemoteItems, allowCharacters, getDisabledReason, remoteQuery.data, items],
     );
     const uploadInputRef = useRef<HTMLInputElement>(null);
     const pickedRemoteRef = useRef(new Map<string, AssetLibraryPickerItem>());

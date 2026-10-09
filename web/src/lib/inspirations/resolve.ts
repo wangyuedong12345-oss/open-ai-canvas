@@ -41,12 +41,12 @@ export function resolveInspirations(builtIn: CreationInspiration[], overlay: Ins
         const override = overlay.overrides[id];
         return [override ? { ...item, ...withoutUndefined(override) } : item];
     });
-    return [...overlay.custom, ...resolved];
+    return [...overlay.custom.map((item) => ({ ...item, sourceId: "custom" as const })), ...resolved];
 }
 
 /** 当前生效条目里属于某个来源的部分，用于灵感页按来源筛选。 */
 export function itemsBySource(items: CreationInspiration[], sourceId: string): CreationInspiration[] {
-    return items.filter((item) => (item.sourceId ?? "original") === sourceId);
+    return items.filter((item) => (item.sourceId ?? "custom") === sourceId);
 }
 
 /**

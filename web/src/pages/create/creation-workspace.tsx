@@ -13,7 +13,6 @@ import { formatVideoResolutionLabel as videoResolutionLabel } from "@/lib/video-
 import { CanvasResourceMentionTextarea } from "@/components/canvas/canvas-resource-mention-textarea";
 import { VoiceRecordingButton } from "@/components/conversation/voice-recording-button";
 import { HoverBorderGradient } from "@/components/ui/aceternity/hover-border-gradient";
-import { SpotlightSurface } from "@/components/ui/aceternity/spotlight-surface";
 import { ModelPicker } from "@/components/model-picker";
 import { aceternityMotion } from "@/lib/aceternity-motion";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
@@ -29,6 +28,7 @@ import { useUserStore } from "@/stores/use-user-store";
 import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { type CreationReference } from "./creation-references";
 import { creationAttachmentKind, type CreationAttachment, type CreationMode } from "./creation-assets";
+import { creationPromptLayout, creationPromptMinHeights } from "./creation-prompt-layout";
 import { countOptions, modeLabels, qualityOptions, resolutionOptions, type CreationShotRailEntry } from "./creation-types";
 import "./creation-product.css";
 import "./creation-scrollbars.css";
@@ -36,7 +36,7 @@ import { CreationAttachmentThumbnail, CreationMediaPreviewModal } from "./creati
 
 export { CreationHistoryDrawer } from "./creation-workspace-history";
 export { CreationMessageView } from "./creation-workspace-messages";
-export { CreationEmptyBanner, CreationEmptySuggest, CreationFeaturedWorks } from "./creation-workspace-empty";
+export { CreationEmptyBanner, CreationEmptySuggest } from "./creation-workspace-empty";
 
 const CanvasPromptOptimizerDrawer = lazy(() => import("@/components/canvas/canvas-prompt-optimizer-drawer").then((module) => ({ default: module.CanvasPromptOptimizerDrawer })));
 
@@ -122,6 +122,7 @@ type ComposerProps = {
     promptOptimizerProvider: PromptOptimizerProvider | null;
     composerFocusRef: RefObject<HTMLTextAreaElement | null>;
     onPromptFocus: () => void;
+    onPromptGrowthChange?: (growth: number) => void;
     placeholderOverride?: string;
     onSubmit: () => void;
 };
@@ -129,6 +130,17 @@ type ComposerProps = {
 type CreationReferenceFilter = "all" | "image" | "video" | "audio" | "file";
 
 export function CreationComposer(props: ComposerProps) {
+    const composerElementRef = useRef<HTMLDivElement>(null);
+    const [promptLayout, setPromptLayout] = useState({ height: creationPromptMinHeights[props.variant], growth: 0, overflow: "hidden" });
+    const onPromptSizeChange = useCallback((contentHeight: number) => {
+        const editor = composerElementRef.current?.querySelector<HTMLElement>(".creation-chat-mention-editor");
+        if (!editor) return;
+        const lineHeight = Number.parseFloat(window.getComputedStyle(editor).lineHeight);
+        if (!Number.isFinite(lineHeight) || lineHeight <= 0) return;
+        const next = creationPromptLayout(contentHeight, lineHeight, props.variant);
+        setPromptLayout((previous) => previous.height === next.height && previous.growth === next.growth && previous.overflow === next.overflow ? previous : next);
+        if (props.variant === "empty") props.onPromptGrowthChange?.(next.growth);
+    }, [props.onPromptGrowthChange, props.variant]);
     const [previewUrl, setPreviewUrl] = useState("");
     const [previewType, setPreviewType] = useState<"image" | "video">("image");
     const [promptOptimizerOpen, setPromptOptimizerOpen] = useState(false);
@@ -289,15 +301,14 @@ export function CreationComposer(props: ComposerProps) {
         return undefined;
     };
     const composer = <HoverBorderGradient as="div" duration={2.2} containerClassName="creation-composer-shell" className="creation-composer-shell-inner">
-        <SpotlightSurface
-            className={`creation-chat-composer is-${props.variant}`}
-            contentClassName="contents"
-            spotlightColor="color-mix(in srgb, var(--user-ink) 12%, transparent)"
-            spotlightRadius={280}
-        >
+        <div ref={composerElementRef} className={`relative isolate creation-chat-composer is-${props.variant}`} style={{
+            "--creation-prompt-height": `${promptLayout.height}px`,
+            "--creation-prompt-growth": `${promptLayout.growth}px`,
+            "--creation-prompt-overflow": promptLayout.overflow,
+        } as CSSProperties}>
         <div className="creation-chat-writing-surface">
             <div className="creation-chat-editor">
-                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
+                <CanvasResourceMentionTextarea ref={props.composerFocusRef} value={props.prompt} references={props.references} mentionMenuWidth={400} sendOnEnter onFocus={props.onPromptFocus} onChange={props.setPrompt} onContentSizeChange={onPromptSizeChange} onSubmit={props.onSubmit} containerClassName="creation-chat-mention-container" className="creation-chat-mention-editor creation-scrollbar" style={{ color: "var(--creation-text)" }} placeholder={props.placeholderOverride || (props.variant === "empty" ? emptyPlaceholder : placeholder)} aria-label="创作提示词，可使用 @ 引用当前参考内容或技能；回车发送，Shift+回车换行" spellCheck disabled={interactionBusy} activeDropReferenceId={dropTargetReferenceId} onReferenceFilesDrop={(reference, files) => { const target = props.references.find((item) => item.id === reference.id); if (target?.attachmentId) props.onReplaceReferenceFiles(target.attachmentId, files); }} />
                 {props.attachments.length || referencesSupported ? <div className={`creation-reference-panel${trackState.isExpanded ? " is-expanded" : ""}`} aria-busy={interactionBusy}>
                     {trackState.isExpanded ? <div className="creation-reference-panel-header">
                         <div className="creation-reference-filter-tabs" role="group" aria-label="筛选参考内容">
@@ -412,7 +423,7 @@ export function CreationComposer(props: ComposerProps) {
             </Button>
         </footer>
         <CreationMediaPreviewModal url={previewUrl} type={previewType} onClose={() => setPreviewUrl("")} />
-        </SpotlightSurface>
+        </div>
     </HoverBorderGradient>;
 
     if (!promptOptimizerOpen) return composer;
