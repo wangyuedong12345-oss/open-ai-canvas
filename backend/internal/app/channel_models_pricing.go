@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"infinite-canvas/backend/internal/model"
+	"yingce/backend/internal/model"
 )
 
 func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, rawCapabilityConfig string, capability string) error {
@@ -21,6 +21,12 @@ func validateChannelModelTierCapabilities(tiers []model.ChannelModelPriceTier, r
 	resolutionSupported := make(map[string]bool, len(config.Video.Resolutions))
 	for _, resolution := range config.Video.Resolutions {
 		resolutionSupported[normalizeChannelModelTierResolution(resolution)] = true
+	}
+	// Keep preset prices when narrowing the selected list; tasks use only selected values.
+	if config.Video.FixedScreenSpec != nil {
+		for _, resolution := range config.Video.FixedScreenSpec.Resolutions {
+			resolutionSupported[normalizeChannelModelTierResolution(resolution)] = true
+		}
 	}
 	durationSupported := make(map[int]bool, len(config.Video.Duration.Values))
 	for _, seconds := range config.Video.Duration.Values {

@@ -1,5 +1,5 @@
 import { bootstrapAppearance } from "@/services/appearance-bootstrap";
-import { isIsolatedDirectorRepro } from "@/lib/dev-repro";
+import { isIsolatedPrevisRepro } from "@/lib/dev-repro";
 
 /**
  * 启动工作台应用。
@@ -9,6 +9,6 @@ import { isIsolatedDirectorRepro } from "@/lib/dev-repro";
  */
 export function bootWorkspace() {
     // The backend-free DEV lab must not make requests before AppProviders isolates it.
-    const appearanceReady = isIsolatedDirectorRepro(import.meta.env.DEV, window.location.pathname) ? Promise.resolve() : bootstrapAppearance();
-    void appearanceReady.finally(() => import("@/application"));
+    const appearanceReady = isIsolatedPrevisRepro(import.meta.env.DEV, window.location.pathname) ? Promise.resolve() : bootstrapAppearance();
+    void appearanceReady.catch(() => undefined).then(() => import("@/application"));
 }

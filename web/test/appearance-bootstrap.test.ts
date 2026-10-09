@@ -4,13 +4,13 @@ import { appearanceLogoURL, normalizePublicAppearance } from "../src/stores/use-
 import { moduleGroupSource } from "./helpers/module-group-source";
 
 test("initial HTML stays brand neutral until the public appearance is resolved", async () => {
-    const [html, mainSource] = await Promise.all([Bun.file(new URL("../index.html", import.meta.url)).text(), Bun.file(new URL("../src/main.tsx", import.meta.url)).text()]);
+    const [html, mainSource] = await Promise.all([Bun.file(new URL("../index.html", import.meta.url)).text(), Bun.file(new URL("../src/lib/workspace-boot.ts", import.meta.url)).text()]);
 
     expect(html).not.toContain("影策");
     expect(html).toContain("<title>正在加载</title>");
     expect(mainSource).toContain("bootstrapAppearance()");
-    expect(mainSource).toContain('import("./application")');
-    expect(mainSource.indexOf("bootstrapAppearance()")).toBeLessThan(mainSource.indexOf('import("./application")'));
+    expect(mainSource).toContain('import("@/application")');
+    expect(mainSource.indexOf("bootstrapAppearance()")).toBeLessThan(mainSource.indexOf('import("@/application")'));
 });
 
 test("a custom login video never falls back to the built-in poster", () => {
