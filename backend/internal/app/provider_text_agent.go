@@ -145,6 +145,8 @@ func runDeclarativeAgentTask(ctx context.Context, input canvasGenerationInput, a
 	if err != nil {
 		return nil, err
 	}
+	wire = protocolTextWire(wire, spec)
+	knownWire = wire == "chat-completion" || wire == "responses" || wire == "claude-api"
 	if knownWire {
 		body := protocolBodyObject(spec.Body)
 		if body == nil {

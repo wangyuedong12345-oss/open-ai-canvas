@@ -92,6 +92,23 @@ export function isNodeInTimeline(nodeId: string, timeline: TimelineProject | nul
     return Boolean(timeline?.clips.some((clip) => clip.nodeId === nodeId));
 }
 
+/** 从节点进入剪辑时只补入当前素材，不重建用户已有的剪辑。 */
+export function ensureNodeInTimeline(timeline: TimelineProject, node: CanvasNodeData): TimelineProject {
+    const mediaKind = node.type === "video" ? "video" : node.type === "audio" ? "audio" : null;
+    if (!mediaKind || timeline.clips.some((clip) => clip.nodeId === node.id && clip.kind === mediaKind)) return timeline;
+    const source = buildTimelineFromNodes([node]);
+    const mediaClip = source.clips.find((clip) => clip.kind === mediaKind);
+    if (!mediaClip) return timeline;
+    const track = timeline.tracks.find((item) => item.id === mediaClip.trackId);
+    if (!track || track.locked) return timeline;
+    const startMs = timeline.clips.filter((clip) => clip.trackId === track.id).reduce((end, clip) => Math.max(end, clip.startMs + clip.durationMs), 0);
+    const addedClips = source.clips
+        .filter((clip) => timeline.tracks.some((item) => item.id === clip.trackId && !item.locked))
+        .map((clip) => ({ ...clip, startMs: startMs + clip.startMs }));
+    const clips = [...timeline.clips, ...addedClips];
+    return { ...timeline, clips, durationMs: getTimelineVisualEndMs(clips), updatedAt: new Date().toISOString() };
+}
+
 /**
  * 将节点字幕条目同步回项目时间线：按视频片段起点偏移重建该节点的字幕片段；
  * 条目为空数组时移除该节点全部字幕片段，保证字幕弹窗与时间线互通。

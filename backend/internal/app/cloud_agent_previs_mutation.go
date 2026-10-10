@@ -997,6 +997,9 @@ func prepareCloudAgentPrevisApplyPatch(repo *repository.Repository, userID, canv
 	}
 	items := make([]cloudAgentApprovalPreviewItem, 0, len(args.Operations))
 	for index, operation := range args.Operations {
+		if err := cloudAgentDirectorDeskOperation(scene, operation); err != nil {
+			return nil, err
+		}
 		if err := cloudAgentPrevisValidateCharacterBindingInCanvas(doc, operation); err != nil {
 			return nil, err
 		}

@@ -1,0 +1,7 @@
+{
+  "repository": "https://github.com/wangyuedong12345-oss/director-desk.git",
+  "commit": "f3afacf5f8bfd33ccf99640c72126add1e76201b",
+  "version": "0.4.11",
+  "license": "MIT",
+  "patches": ["src/main.ts", "src/ui/project-save.ts", "src/ui/ai-panel-view.ts", "src/storage.ts", "src/storage/host-scope.ts", "src/storage/local-library.ts", "src/building/staging-store.ts", "src/animation/user-motion-store.ts", "src/automation/edit-journal.ts"]
+}

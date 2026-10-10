@@ -5,6 +5,11 @@ description: 当前项目已实现的核心工作台能力与使用入口
 
 # 功能清单
 
+## DirectorDesk 预演台
+
+画布预演入口已接入 DirectorDesk 原生三维编辑器，支持原生工程保存、账号隔离草稿，以及普通、白模、深度视频回流。上游源码与接入补丁分离，便于持续吸收更新。桌面 AI/MCP/插件不在本次接入范围内；旧复杂模型与骨骼工程不自动转换。详见 [接入合同](../canvas/director-desk) 和 [待测试](../progress/pending-test)。
+
+
 ## 可美 KM Seedream 图片
 
 `km-kemei-seedream` 声明式插件接入 Seedream 5.0 Pro / Flash 的文生图与参考图编辑，支持 URL / Base64 响应并由宿主统一保存图片。精确模型 ID 与扩展参数见插件包内 `docs/interface.md`。

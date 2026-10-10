@@ -31,20 +31,7 @@ func runTextTask(ctx context.Context, input canvasGenerationInput) (map[string]i
 // Known text protocols keep the plugin's request mapping and host transport,
 // while sharing the SSE parser used by text generation and Agent requests.
 func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInput, spec protocol.RequestSpec) ([]byte, *protocol.Result, error) {
-	wire := input.Config.InterfaceType
-	if wire == string(model.ChannelInterfaceOpenAIResponse) {
-		wire = "responses"
-	}
-	if wire != "chat-completion" && wire != "responses" && wire != "claude-api" {
-		switch {
-		case strings.HasSuffix(spec.Path, "/chat/completions"):
-			wire = "chat-completion"
-		case strings.HasSuffix(spec.Path, "/responses"):
-			wire = "responses"
-		case strings.HasSuffix(spec.Path, "/messages"):
-			wire = "claude-api"
-		}
-	}
+	wire := protocolTextWire(input.Config.InterfaceType, spec)
 	if input.Mode != "text" || (wire != "chat-completion" && wire != "responses" && wire != "claude-api") {
 		data, err := executeProtocolRequest(ctx, input.Config, spec)
 		return data, nil, err
@@ -81,6 +68,24 @@ func executeProtocolCreateRequest(ctx context.Context, input canvasGenerationInp
 		return nil, nil, errors.New("流式文本接口没有返回内容")
 	}
 	return data, &protocol.Result{Text: text, Reasoning: stringField(parsed, "reasoning")}, nil
+}
+
+// 协议插件 ID 可以不同，但标准文本端点共用同一套流式解析。
+func protocolTextWire(wire string, spec protocol.RequestSpec) string {
+	if wire == string(model.ChannelInterfaceOpenAIResponse) {
+		wire = "responses"
+	}
+	if wire != "chat-completion" && wire != "responses" && wire != "claude-api" {
+		switch {
+		case strings.HasSuffix(spec.Path, "/chat/completions"):
+			wire = "chat-completion"
+		case strings.HasSuffix(spec.Path, "/responses"):
+			wire = "responses"
+		case strings.HasSuffix(spec.Path, "/messages"):
+			wire = "claude-api"
+		}
+	}
+	return wire
 }
 
 func runLegacyTextTask(ctx context.Context, input canvasGenerationInput) (map[string]interface{}, error) {

@@ -173,6 +173,7 @@ export function useCanvasPrevis({
         else nextNodes.push(previewNode);
 
         let clayVideoId = sourceNode.metadata?.previsClayVideoNodeId;
+        const videoLabel = output.videoKind === "depth" ? "深度视频" : output.videoKind === "color" ? "普通视频" : "白模视频";
         if (videoUpload) {
             clayVideoId ||= `video-previs-clay-${Date.now()}`;
             const videoIndex = nextNodes.findIndex((item) => item.id === clayVideoId);
@@ -181,11 +182,11 @@ export function useCanvasPrevis({
                 ...existingVideo,
                 id: clayVideoId,
                 type: CanvasNodeType.Video,
-                title: `${sourceNode.title} · 白膜视频`,
+                title: `${sourceNode.title} · ${videoLabel}`,
                 position: existingVideo?.position || { x: sourceNode.position.x, y: sourceNode.position.y + sourceNode.height + 48 },
                 width: existingVideo?.width || 360,
                 height: existingVideo?.height || 220,
-                metadata: { ...existingVideo?.metadata, ...videoMetadata(videoUpload), prompt: output.prompt, workflowKind: "reference_video", assetTags: ["预演台白膜", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
+                metadata: { ...existingVideo?.metadata, ...videoMetadata(videoUpload), prompt: output.prompt, workflowKind: "reference_video", assetTags: [`预演台${videoLabel}`, `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
             };
             if (videoIndex >= 0) nextNodes[videoIndex] = videoNode;
             else nextNodes.push(videoNode);

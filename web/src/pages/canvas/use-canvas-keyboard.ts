@@ -1,6 +1,7 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react";
 
 import type { CanvasNodeData, ContextMenuState } from "@/types/canvas";
+import { isCanvasTextEditingTarget, shouldYieldCanvasKeyboard } from "@/lib/canvas/canvas-keyboard-scope";
 
 type UseCanvasKeyboardOptions = {
     enabled?: boolean;
@@ -89,10 +90,11 @@ export function useCanvasKeyboard({
         if (!enabled) return;
         const handleKeyDown = (event: KeyboardEvent) => {
             const target = event.target instanceof Element ? event.target : null;
+            if (event.defaultPrevented || event.isComposing || shouldYieldCanvasKeyboard(target)) return;
             if (target?.closest(".canvas-node-toolbar, .canvas-node-toolbar-menu")) return;
             const key = event.key.toLowerCase();
             const isModifierShortcut = event.metaKey || event.ctrlKey;
-            const isTextEditingTarget = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement || Boolean(target?.closest("[contenteditable='true']"));
+            const isTextEditingTarget = isCanvasTextEditingTarget(target);
 
             if (isModifierShortcut && !event.altKey && (key === "+" || key === "=" || event.code === "NumpadAdd")) {
                 event.preventDefault();
@@ -117,7 +119,6 @@ export function useCanvasKeyboard({
                 return;
             }
             if (isModifierShortcut && !event.altKey && key === "f") {
-                if (target?.closest(".ant-modal-wrap, .ant-dropdown, .ant-popover")) return;
                 event.preventDefault();
                 event.stopPropagation();
                 if (!event.repeat) {
@@ -204,7 +205,7 @@ export function useCanvasKeyboard({
 
         const handlePaste = (event: ClipboardEvent) => {
             const target = event.target instanceof Element ? event.target : null;
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement || target?.closest("[contenteditable='true']")) return;
+            if (event.defaultPrevented || shouldYieldCanvasKeyboard(target) || isCanvasTextEditingTarget(target)) return;
             // 节点标记写入失败或仍在写入时避开旧系统图片，其余情况保持系统内容优先。
             event.preventDefault();
             const text = event.clipboardData?.getData("text/plain") || "";

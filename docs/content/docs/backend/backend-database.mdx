@@ -5,6 +5,15 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## DirectorDesk 工程
+
+本次无新表或列。原生工程保存在既有 `canvas_projects` 画布 JSON 的 `previsScenes[].directorDesk` 中：`version`、`upstreamVersion`、`document`、`resources`、`projection`。
+
+`document` 保留原生多戏段文档，内嵌素材字符串替换为空占位；`resources` 保存原始 JSON 路径、影策 `resource:<id>` 和字节数，读取时复原。上传对象复用资源记录、当前账号访问校验及画布 JSON 递归引用保护。`projection` 是用于差异合并的上次活动戏段摘要，不替代完整原生文档。
+
+原生工程内的 `resourceId` 等内部标识键以 `$director:` 前缀编码，避免与影策资源表 ID 混淆；读取时还原。素材引用表的 `storageKey` 保持影策合同，继续参与服务端归属和删除保护。
+
+
 ## 分片上传预留
 
 Schema 45 新增 `upload_reservations`：`id`、`user_id`、`size`、`day`、`expires_at`。创建会话时在数据库事务内检查并行会话数、现有资源容量、未到期预留和每日上传用量，更新既有 `user_daily_upload_usages` 后插入预留。SQLite 先取得写锁，PostgreSQL 使用账号级事务 advisory lock。

@@ -1,0 +1,43 @@
+---
+title: DirectorDesk 预演台
+description: 原生预演编辑器、工程存储与上游更新边界
+---
+
+# DirectorDesk 预演台
+
+画布预演节点进入同源 DirectorDesk 编辑器。影策负责登录、画布、资源保存及视频回流；DirectorDesk 负责三维编辑、时间轴、动作、独立戏段、灯光、物理和视频渲染。
+
+当前源码来自 [DirectorDesk](https://github.com/wangyuedong12345-oss/director-desk)，版本 `0.4.11`，提交 `f3afacf5f8bfd33ccf99640c72126add1e76201b`，按 MIT 许可保留 `web/vendor/director-desk/LICENSE`，发布副本位于 `web/public/licenses/director-desk.txt`，随 Vite 构建发布。来源与补丁清单在 `UPSTREAM.json`。
+
+## 使用与存储
+
+进入既有预演节点，编辑后选择“保存”或“返回画布”。“添加视频到画布”使用真实原生渲染器，支持普通、白模、深度画面以及 MP4/WebM。导出是否可用取决于浏览器 WebCodecs 编码能力；错误会显示，不能把失败当作视频产出。
+
+`PrevisScene.directorDesk` 保存版本、完整原生工程、素材引用表和上次投影。原生工程保留多戏段、编组、动作、物理、光学参数及独立资源；旧预演字段仅表示当前活动戏段的基本摘要，用于画布节点和既有 Agent 工具。摘要不承担原生工程备份职责。
+
+工程里的内嵌 `data` 字符串上传到影策资源 API，正文保留空占位与 `{path, storageKey, bytes}` 引用表；打开时恢复字符串后交给原生校验器。原生 `resourceId` 等内部标识键在存储正文中以 `$director:` 前缀编码，读取时还原，避免被当作影策资源 ID 校验；同前缀的原始扩展字段再转义一次。影策 `storageKey` 引用仍正常参与归属校验及递归引用删除保护，无新数据库表。用户 scope 变化时清空上传去重缓存，中途切换账号会中止写回。
+
+未保存工程放在按账号、画布、场景区分的 IndexedDB 草稿中。自动草稿在编辑停顿后备份；重新载入前先保存当前草稿。保存必须先落地资源与画布，再确认云端同步成功；云端失败时显示本地已保存并保留草稿。画布或 Agent 并发修改场景时拒绝覆盖，用户可保留草稿后重新载入。
+
+原生桌面 AI、MCP、插件与自动更新未接入浏览器宿主，对应入口隐藏。画布原有 Agent 保持其权限、审批与任务体系；这不等于已移植全部原生 Agent 工具。
+
+## 旧工程与 Agent 边界
+
+五种新建模板可转换为原生场景，默认演员改用原生白模。旧外部模型、贴图、已映射骨骼、自定义骨骼动画、全景环境，以及 25fps / 2.39:1 工程会明确拒绝自动转换，原数据保持不变。这些工程须在原生编辑器中导入素材后人工重建。
+
+既有 Agent 工具支持基本对象、位置走位、摄影机、灯光和场景名称/背景。只把投影中实际改变的字段写入原生工程，未改动的原生动画和关系保留；整体移动同步平移原生路径。原生对象删除、切镜重写、路径清除、灯光改型和不支持的姿势等操作在申请审批前拒绝。锁定、握持、结构连接和绑定摄影机的变换也拒绝通过旧工具修改。
+
+## 持续吸收上游更新
+
+上游源码独立放在 `web/vendor/director-desk/src`；影策接入放在 `web/director-desk` 与画布组件。`web/director-desk/upstream.patch` 是对原始源码的少量补丁，包含宿主保存、账号隔离、自动恢复边界和 TypeScript 适配。
+
+更新步骤：
+
+1. 保护工作区改动，在独立分支读取上游新提交；核对许可、依赖和工程格式变化。
+2. 在临时目录检出新提交，替换 vendor 的 `src`、`skills`、`package.json` 与 `LICENSE`，同步 `web/public/licenses/director-desk.txt`；不要复制 `.git`、`node_modules`、Electron 发布物。
+3. 对新源码重放 `upstream.patch`，逐个处理实际冲突；不能直接覆盖接入后的 vendor 文件。补丁路径使用 `git apply --directory=<新检出目录> -p4 web/director-desk/upstream.patch`，先用 `--check` 检查。
+4. 按新依赖更新 `web/package.json` / `bun.lock`；根据工程格式及导出 API 调整 `host.ts`、`projection.ts` 与存储合同。更新 `UPSTREAM.json` 及工程的 `upstreamVersion`，重新生成补丁。
+5. 运行 `bun test test/director-desk-projection.test.ts`、影策 `bun run typecheck`、原生 `bun x tsc --noEmit -p director-desk/tsconfig.json`、`bun run build`，以及后端专项测试。
+6. 在真实画布中验收旧工程打开、原生素材保存、重新打开、多戏段和普通/白模/深度视频回流；再提交更新。
+
+可以持续吸收更新，但不自动合并或部署。出现原生存储格式升级时先明确迁移方案，不能仅修改版本号绕过校验。

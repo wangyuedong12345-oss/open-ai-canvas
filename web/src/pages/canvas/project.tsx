@@ -177,7 +177,7 @@ import {
 import { ART_CRITIQUE_NODE_TYPE } from "@/lib/art-critique/contracts";
 import { copyImageToSystemClipboard } from "./canvas-clipboard";
 
-const CanvasPrevisWorkbench = lazy(() => import("@/components/canvas/previs/canvas-previs-workbench").then((module) => ({ default: module.CanvasPrevisWorkbench })));
+const CanvasPrevisWorkbench = lazy(() => import("@/components/canvas/previs/director-desk-workbench").then((module) => ({ default: module.DirectorDeskWorkbench })));
 const CanvasDrawingEditorModal = lazy(() => import("@/components/canvas/canvas-drawing-editor-modal").then((module) => ({ default: module.CanvasDrawingEditorModal })));
 
 const NODE_STATUS_SUCCESS = "success" as const;

@@ -1,0 +1,168 @@
+diff --git a/.local/analysis/director-desk/src/animation/user-motion-store.ts b/web/vendor/director-desk/src/animation/user-motion-store.ts
+index ee775fdc..277dffee 100644
+--- a/.local/analysis/director-desk/src/animation/user-motion-store.ts
++++ b/web/vendor/director-desk/src/animation/user-motion-store.ts
+@@ -2,7 +2,8 @@ import { assertUserMotion, type UserMotion, type UserMotionAsset } from './user-
+ import { assertResourceHeader, modelResourceId, type ModelResource } from '../resources/project-resources.ts';
+ import { unpackModelFiles } from '../resources/model-package.ts';
+ 
+-const databaseName = 'director-user-motions-v1';
++import { hostDatabaseName } from '../storage/host-scope.ts';
++const databaseName = hostDatabaseName('director-user-motions-v1');
+ async function database(): Promise<IDBDatabase> {
+     if (typeof indexedDB === 'undefined') throw Error('此环境没有本机动作库；离线工程请使用已嵌入的动作资源和 retarget 片段');
+     return new Promise((resolve, reject) => {
+diff --git a/.local/analysis/director-desk/src/automation/edit-journal.ts b/web/vendor/director-desk/src/automation/edit-journal.ts
+index b938f5b4..e11b74a9 100644
+--- a/.local/analysis/director-desk/src/automation/edit-journal.ts
++++ b/web/vendor/director-desk/src/automation/edit-journal.ts
+@@ -1,10 +1,11 @@
+ import type { EditLocation } from './edit-locations.ts';
++import { hostDatabaseName } from '../storage/host-scope.ts';
+ export interface EditReceipt { id: string; sceneId: string; sceneName: string; created: number; label: string; locations: EditLocation[] }
+ const memory = new Map<string, EditReceipt>(), listeners = new Set<() => void>();
+ async function database() {
+     if (typeof indexedDB === 'undefined') return null;
+     return await new Promise<IDBDatabase>((resolve, reject) => {
+-        const request = indexedDB.open('director-edit-locations', 1);
++        const request = indexedDB.open(hostDatabaseName('director-edit-locations'), 1);
+         request.onupgradeneeded = () => { const store = request.result.createObjectStore('receipts', { keyPath: 'id' }); store.createIndex('scene', 'sceneId'); };
+         request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+     });
+diff --git a/.local/analysis/director-desk/src/building/staging-store.ts b/web/vendor/director-desk/src/building/staging-store.ts
+index dd317df0..b2a2f311 100644
+--- a/.local/analysis/director-desk/src/building/staging-store.ts
++++ b/web/vendor/director-desk/src/building/staging-store.ts
+@@ -1,5 +1,6 @@
+ import { assertStagingAsset, stagingMetadata, type StagingAsset, type StagingMetadata } from './staging-asset.ts';
+-const databaseName = 'director-staging-library-v1';
++import { hostDatabaseName } from '../storage/host-scope.ts';
++const databaseName = hostDatabaseName('director-staging-library-v1');
+ async function transaction<T>(mode: IDBTransactionMode, work: (tx: IDBTransaction, result: (value: T) => void) => void): Promise<T> {
+     if (typeof indexedDB === 'undefined') throw Error('此环境没有本机布景库；离线请使用 .staging 文件');
+     const db = await new Promise<IDBDatabase>((resolve, reject) => {
+diff --git a/.local/analysis/director-desk/src/main.ts b/web/vendor/director-desk/src/main.ts
+index 52293cd3..0ba10fb5 100644
+--- a/.local/analysis/director-desk/src/main.ts
++++ b/web/vendor/director-desk/src/main.ts
+@@ -1,4 +1,6 @@
+ import { extensionHost } from './plugins/extension-host.ts';
++import type { DirectorHostWindow } from './storage/host-scope.ts';
++const embedded = Boolean((window as DirectorHostWindow).yingceDirector);
+ import './plugins/extension-panels.css';
+ import { renderDepthControls } from './ui/depth-controls.ts';
+ import { setSelectedEntities, selectedEntities } from './editor/timeline-selection.ts';
+@@ -62,7 +64,7 @@ let draft: {
+     id: string;
+ } | null = null;
+ const history = new SceneWorkspace(project, () => ({ time, selected, preview }));
+-const recoverySave = new RecoveryAutosave(force => autosave(() =>
++const recoverySave = new RecoveryAutosave(force => embedded ? Promise.resolve(false) : autosave(() =>
+     history.pending || draft || engine.dragging || engine.exporting || busy && !force ? null : history.document(),
+     () => ({ path: history.filePath, dirty })),
+     () => { $('#save-status').textContent = dirty ? '自动备份已保存' : '项目已保存'; },
+@@ -351,7 +353,7 @@ mountApplicationMenu();
+ renderPanels();
+ engine.select(selected);
+ requestAnimationFrame(frame);
+-void recoverSession().then(async restored => { const p = restored?.document; if (p && restored && revision === 0) {
++void (embedded ? Promise.resolve(null) : recoverSession()).then(async restored => { const p = restored?.document; if (p && restored && revision === 0) {
+     await prepareDocumentModels(engine.externalModels, p);
+     if (revision !== 0 || busy || history.pending || draft) {
+         // An overlapping import owns its prepared sources until its own commit/cleanup.
+@@ -371,7 +373,8 @@ window.addEventListener('beforeunload', event => { if (dirty || busy || history.
+     event.preventDefault();
+     event.returnValue = '';
+ } });
+-if (import.meta.env.DEV) {
++export { uiContext, toolService };
++if (import.meta.env.DEV) {
+     if (!document.title.endsWith(' · 开发测试版')) document.title += ' · 开发测试版';
+     Object.assign(window, { __director: { callTool: (name: string, args: Record<string, unknown> = {}) => toolService.call(name, args), getProject: () => clone(project), getDocument: () => history.document(), getEngine: () => engine, setTime: (t: number) => { playing = false; seek(t); }, setPreview: (id: string) => { preview = id; renderCameras(); }, replaceProject: (p: Project | SceneDocument) => { selectClip(null);project = history.reset(p); revision++; selected = project.entities[0].id; time = 0; engine.rebuild(project); renderPanels(); }, signature: () => engine.projectionSignature(), exportForTest: async (opts: Parameters<typeof import('./export.ts')['exportVideo']>[1]) => { const { exportVideo } = await import('./export.ts'); const blob = await exportVideo(engine, opts, new AbortController().signal, () => { }); return blob ? Array.from(new Uint8Array(await blob.arrayBuffer())) : []; } } });
+ }
+diff --git a/web/vendor/director-desk/src/storage/host-scope.ts b/web/vendor/director-desk/src/storage/host-scope.ts
+new file mode 100644
+index 00000000..0ca4be3b
+--- /dev/null
++++ b/web/vendor/director-desk/src/storage/host-scope.ts
+@@ -0,0 +1,7 @@
++export type DirectorHostWindow = Window & {
++    yingceDirector?: { scope: string; save: (document: unknown) => Promise<void> };
++};
++export function hostDatabaseName(name: string) {
++    const scope = typeof window === "undefined" ? undefined : (window as DirectorHostWindow).yingceDirector?.scope;
++    return scope ? `${name}:${scope}` : name;
++}
+diff --git a/.local/analysis/director-desk/src/storage/local-library.ts b/web/vendor/director-desk/src/storage/local-library.ts
+index 703145a2..d9d1e308 100644
+--- a/.local/analysis/director-desk/src/storage/local-library.ts
++++ b/web/vendor/director-desk/src/storage/local-library.ts
+@@ -1,8 +1,9 @@
++import { hostDatabaseName } from './host-scope.ts';
+ /** Metadata can be listed without reading large payloads. Transactions resolve only after commit. */
+ export async function library<T>(name: string, mode: IDBTransactionMode,
+     work: (tx: IDBTransaction, result: (value: T) => void) => void): Promise<T> {
+     const db = await new Promise<IDBDatabase>((resolve, reject) => {
+-        const request = indexedDB.open(name, 1);
++        const request = indexedDB.open(hostDatabaseName(name), 1);
+         request.onupgradeneeded = () => {
+             for (const store of ['items', 'metadata', 'sources']) request.result.createObjectStore(store);
+         };
+diff --git a/.local/analysis/director-desk/src/storage.ts b/web/vendor/director-desk/src/storage.ts
+index a798130e..824d6359 100644
+--- a/.local/analysis/director-desk/src/storage.ts
++++ b/web/vendor/director-desk/src/storage.ts
+@@ -1,4 +1,5 @@
+ import { clone, type Project } from './model.ts';
++import { hostDatabaseName } from './storage/host-scope.ts';
+ import { readSceneDocument, type SceneDocument } from './scenes/sequence-project.ts';
+ import type { SceneView } from './scenes/sequence-session.ts';
+ export interface ResourceOwner { resources?: readonly { id: string }[] }
+@@ -14,7 +15,7 @@ export interface EditorHistory {
+     undo(project: Project): Project | null;
+     redo(project: Project): Project | null;
+ }
+-const DB_NAME = 'director-desk-v1';
++const DB_NAME = hostDatabaseName('director-desk-v1');
+ async function database() { return await new Promise<IDBDatabase>((resolve, reject) => { const r = indexedDB.open(DB_NAME, 1); r.onupgradeneeded = () => r.result.createObjectStore('projects'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error); }); }
+ export interface RecoveryFileState { path: string; dirty: boolean }
+ export async function autosave(project: Project | SceneDocument | (() => SceneDocument | null), fileState?: () => RecoveryFileState) {
+diff --git a/.local/analysis/director-desk/src/ui/ai-panel-view.ts b/web/vendor/director-desk/src/ui/ai-panel-view.ts
+index a7a5a461..4197d5c9 100644
+--- a/.local/analysis/director-desk/src/ui/ai-panel-view.ts
++++ b/web/vendor/director-desk/src/ui/ai-panel-view.ts
+@@ -19,7 +19,7 @@ export function createAIPanel(desktop: boolean) {
+     const find = <T extends HTMLElement = HTMLInputElement>(id: string) => panel.querySelector<T>('#' + id)!;
+     const windowLayout = floatingPanel(panel, panel.querySelector('.ai-header')!, find('ai-resize'), find<HTMLButtonElement>('ai-collapse'), 'director-ai-window-v1');
+     const open = (value: boolean) => { panel.hidden = !value; if (value) windowLayout.refresh(); toggle.setAttribute('aria-expanded', String(value)); if (!value) { panel.querySelector('[data-parent-page-back]')?.remove(); toggle.focus({ preventScroll: true }); } };
+-    toggle.onclick = () => open(panel.hidden); find('ai-close').onclick = () => open(false);
++    toggle.onclick = () => open(Boolean(panel.hidden)); find('ai-close').onclick = () => open(false);
+     const navigate = (view: string) => {
+         for (const name of ['chat', 'settings', 'skills', 'mcp']) find(name === 'settings' ? 'ai-settings' : 'ai-' + name).hidden = name !== view;
+         panel.querySelectorAll<HTMLElement>('[data-ai-view]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.aiView === view)));
+diff --git a/.local/analysis/director-desk/src/ui/project-save.ts b/web/vendor/director-desk/src/ui/project-save.ts
+index 0ca61cdd..bfbb12d4 100644
+--- a/.local/analysis/director-desk/src/ui/project-save.ts
++++ b/web/vendor/director-desk/src/ui/project-save.ts
+@@ -1,5 +1,6 @@
+ import type { AppContext } from '../app-context.ts';
+ import { download } from '../storage.ts';
++import type { DirectorHostWindow } from '../storage/host-scope.ts';
+ 
+ export async function saveProjectFile(ctx: AppContext, saveAs = false): Promise<boolean> {
+     if (ctx.busy || ctx.engine.exporting) { ctx.toast('请先完成或取消当前任务，再保存项目'); return false; }
+@@ -9,6 +10,14 @@ export async function saveProjectFile(ctx: AppContext, saveAs = false): Promise<
+     const name = document.name.replace(/[<>:"/\\|?*]/g, '_') + '.director';
+     ctx.busy = true; ctx.playing = false; ctx.updateTimeUI();
+     try {
++        const host = (window as DirectorHostWindow).yingceDirector;
++        if (host) {
++            await host.save(document);
++            ctx.scenes.markSaved();
++            ctx.dirty = false;
++            documentStatus('画布已保存');
++            return true;
++        }
+         const files = window.directorDesktop?.files;
+         if (files) {
+             const result = await files('save-project', { name, content, ...(!saveAs && ctx.scenes.filePath ? { path: ctx.scenes.filePath } : {}) });

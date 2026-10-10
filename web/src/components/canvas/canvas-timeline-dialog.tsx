@@ -13,8 +13,9 @@ import { saveAs } from "file-saver";
 import { CanvasTimelineRuler } from "./canvas-timeline-ruler";
 import { CanvasTimelinePreview } from "./canvas-timeline-preview";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { isCanvasTextEditingTarget } from "@/lib/canvas/canvas-keyboard-scope";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
-import { buildTimelineFromNodes, isNodeInTimeline, syncTimelineSubtitleClips } from "@/lib/timeline/timeline-build";
+import { buildTimelineFromNodes, ensureNodeInTimeline, isNodeInTimeline, syncTimelineSubtitleClips } from "@/lib/timeline/timeline-build";
 import { canPlaceAt, clampClipDurationByNeighbors, findNearestAvailablePlacement } from "@/lib/timeline/timeline-placement";
 import { computeSnap } from "@/lib/timeline/timeline-snap";
 import { DEFAULT_AUDIO_TRACK_ID, DEFAULT_VIDEO_TRACK_ID, normalizeTimelineProject } from "@/lib/timeline/timeline-tracks";
@@ -107,7 +108,8 @@ export function CanvasTimelineDialog({
         if (initializedRef.current) return;
         initializedRef.current = true;
         const base = timeline ? normalizeTimelineProject(timeline) : buildTimelineFromNodes(nodes);
-        const next = timeline ? syncTimelineSubtitleClips(base, nodes) : base;
+        const synced = timeline ? syncTimelineSubtitleClips(base, nodes) : base;
+        const next = ensureNodeInTimeline(synced, node);
         setDraft(next);
         setPlayheadMs(0);
         setZoomLevel(1);
@@ -263,6 +265,7 @@ export function CanvasTimelineDialog({
         if (!clip) return;
         event.preventDefault();
         event.stopPropagation();
+        event.currentTarget.focus({ preventScroll: true });
         (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
         setSelectedClipId(clipId);
         if (mode === "move") {
@@ -316,6 +319,8 @@ export function CanvasTimelineDialog({
             message.info("请先点击选中一个片段");
             return;
         }
+        const clip = draft.clips.find((item) => item.id === selectedClipId);
+        if (exporting || draft.tracks.find((track) => track.id === clip?.trackId)?.locked) return;
         applyDraft((current) => ({
             ...current,
             clips: current.clips.filter((clip) => clip.id !== selectedClipId),
@@ -588,6 +593,8 @@ export function CanvasTimelineDialog({
                     return (
                         <div
                             key={clip.id}
+                            tabIndex={0}
+                            onFocus={() => setSelectedClipId(clip.id)}
                             className={`absolute top-1 flex h-[calc(100%-8px)] cursor-grab touch-none select-none items-center overflow-hidden rounded-md border text-xs leading-none active:cursor-grabbing`}
                             style={{
                                 left,
@@ -649,7 +656,17 @@ export function CanvasTimelineDialog({
             }}
             flush
         >
-            <div className="flex h-[min(76vh,760px)] min-h-[420px] flex-col text-sm" style={{ color: theme.node.text }}>
+            <div
+                className="flex h-[min(76vh,760px)] min-h-[420px] flex-col text-sm"
+                style={{ color: theme.node.text }}
+                onKeyDown={(event) => {
+                    if (event.defaultPrevented || event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey || isCanvasTextEditingTarget(event.target instanceof Element ? event.target : null)) return;
+                    if (event.key !== "Delete" && event.key !== "Backspace") return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (selectedClipId) deleteSelectedClip();
+                }}
+            >
                 <div ref={toolbarRef} className="flex flex-nowrap items-center gap-2 overflow-hidden border-b px-4 py-3" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
                     <span className="min-w-24 rounded-md border px-2 py-1 text-xs font-semibold tabular-nums" style={{ borderColor: theme.toolbar.border, background: theme.node.fill, color: theme.accent.primary }}>
                         {formatTimelineTime(playheadMs)}

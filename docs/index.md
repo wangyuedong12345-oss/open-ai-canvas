@@ -59,6 +59,8 @@
 
 ## 按约定维护的文档（`docs/content/docs/`）
 
+- [DirectorDesk 预演台与上游更新](content/docs/canvas/director-desk.mdx)：原生工程、资源与草稿合同，旧工程/Agent 边界以及持续吸收上游更新步骤。
+
 功能、代码地图、待办、待测试分别维护在以下页面；尚未建立的专题会在对应任务中补齐：
 
 - [AI 审美批改画布插件](content/docs/plugins/ai-art-critique.mdx)

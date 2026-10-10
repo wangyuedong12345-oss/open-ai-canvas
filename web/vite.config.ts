@@ -48,6 +48,7 @@ export default defineConfig({
     },
     build: {
         rolldownOptions: {
+            input: { application: resolve(webDir, "index.html"), directorDesk: resolve(webDir, "director-desk/index.html") },
             output: {
                 strictExecutionOrder: true,
                 codeSplitting: {

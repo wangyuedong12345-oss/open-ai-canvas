@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
-import { resolveMediaUrl } from "@/services/file-storage";
+import { resolveVideoMediaUrl } from "@/services/file-storage";
 import { formatTimelineTime } from "@/lib/timeline/timeline-view";
 import { createDefaultSubtitleStyle } from "@/types/timeline";
 import type { TimelineClip } from "@/types/timeline";
@@ -32,6 +32,7 @@ const AUTO_ADVANCE_GAP_MS = 500;
 export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme, onTogglePlay, onPlayheadChange }: CanvasTimelinePreviewProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [videoUrl, setVideoUrl] = useState("");
+    const [videoError, setVideoError] = useState("");
     const [videoSize, setVideoSize] = useState<{ width: number; height: number } | null>(null);
     // 源内定位目标（秒）；视频换源后 metadata 尚未加载时先记录，loadedmetadata 后再应用。
     const targetSeekSecRef = useRef<number | null>(null);
@@ -52,15 +53,22 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
         const node = activeNode;
         const media = activeVideoClip?.directMedia;
         setVideoUrl("");
+        setVideoError("");
         setVideoSize(null);
         if (!node && !media) return;
         let cancelled = false;
         // 直连媒体片段（directMedia，不落画布）与画布节点走同一套稳定资源地址解析策略。
         const storageKey = node?.metadata?.storageKey || media?.storageKey || "";
-        const fallback = node?.metadata?.content || media?.url || "";
-        void resolveMediaUrl(storageKey, fallback).then((url) => {
-            if (!cancelled) setVideoUrl(url);
-        });
+        const fallback = node?.metadata?.content || media?.url || media?.dataUrl || media?.content || "";
+        void resolveVideoMediaUrl(storageKey, fallback)
+            .then((url) => {
+                if (cancelled) return;
+                setVideoUrl(url);
+                if (!url) setVideoError("该片段没有可用的视频地址");
+            })
+            .catch((error: unknown) => {
+                if (!cancelled) setVideoError(error instanceof Error ? error.message : "视频地址加载失败");
+            });
         return () => {
             cancelled = true;
         };
@@ -127,10 +135,10 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
     return (
         <div className="flex items-center gap-3 border-b px-4 py-2.5" style={{ borderColor: theme.toolbar.border, background: theme.toolbar.panel }}>
             <div className="relative grid shrink-0 place-items-center overflow-hidden rounded-lg bg-black" style={{ width: PREVIEW_WIDTH, height: PREVIEW_HEIGHT }} data-canvas-no-zoom>
-                {videoUrl && activeVideoClip ? (
+                {videoUrl && activeVideoClip && !videoError ? (
                     <>
                         <div className="relative" style={previewDisplay ? { width: previewDisplay.width, height: previewDisplay.height } : { width: "100%", height: "100%" }}>
-                            <video ref={videoRef} className="block h-full w-full" src={videoUrl} playsInline preload="metadata" onLoadedMetadata={(event) => handleVideoLoadedMetadata(event.currentTarget)} onTimeUpdate={handleTimeUpdate} />
+                            <video ref={videoRef} className="block h-full w-full" src={videoUrl} playsInline preload="metadata" onLoadedMetadata={(event) => handleVideoLoadedMetadata(event.currentTarget)} onTimeUpdate={handleTimeUpdate} onError={() => setVideoError("视频加载失败，请检查素材是否可访问或格式是否支持")} />
                             {activeSubtitleClip ? <CanvasSubtitleOverlay text={activeSubtitleClip.text || ""} highlight={activeHighlight} style={subtitleStyle} /> : null}
                         </div>
                         <button
@@ -148,7 +156,9 @@ export function CanvasTimelinePreview({ clips, nodes, playheadMs, playing, theme
                         </button>
                     </>
                 ) : (
-                    <div className="px-4 text-center text-xs opacity-55">该位置无视频片段</div>
+                    <div className="px-4 text-center text-xs opacity-55">
+                        {!activeVideoClip ? "该位置无视频片段" : !activeNode && !activeVideoClip.directMedia ? "源视频节点已不存在，请重新添加素材" : videoError || "正在加载视频…"}
+                    </div>
                 )}
             </div>
             <div className="min-w-0 flex-1">

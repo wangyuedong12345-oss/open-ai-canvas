@@ -171,6 +171,7 @@ export type PrevisEnvironment = {
 };
 
 export type PrevisScene = {
+    directorDesk?: DirectorDeskState;
     id: string;
     version: 1;
     title: string;
@@ -196,4 +197,14 @@ export type PrevisSceneOutput = {
     normal?: Blob;
     clayVideo?: Blob;
     clayVideoMimeType?: string;
+    videoKind?: "color" | "clay" | "depth";
+};
+
+export type DirectorDeskResource = { path: Array<string | number>; storageKey: string; bytes: number };
+export type DirectorDeskState = {
+    version: 1;
+    upstreamVersion: "0.4.11";
+    document: Record<string, unknown>;
+    resources: DirectorDeskResource[];
+    projection: Omit<PrevisScene, "directorDesk">;
 };

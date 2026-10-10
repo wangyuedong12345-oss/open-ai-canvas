@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 
 import { resolveCanvasAppearance, resolveCanvasGridColor, type CanvasAppearance } from "@/lib/canvas/canvas-appearance";
 import { resolveCanvasPointerIntent } from "@/lib/canvas/canvas-selection";
+import { shouldYieldCanvasKeyboard } from "@/lib/canvas/canvas-keyboard-scope";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { applyCanvasLiveViewport, subscribeCanvasViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
@@ -174,6 +175,8 @@ export function CanvasViewport({
         if (!interactive) return;
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.code !== "Space") return;
+            const target = event.target instanceof Element ? event.target : null;
+            if (event.defaultPrevented || event.isComposing || shouldYieldCanvasKeyboard(target)) return;
             if (event.target instanceof Element && event.target.closest("input,textarea,select,button,[contenteditable='true']")) return;
             event.preventDefault();
             spacePressedRef.current = true;
