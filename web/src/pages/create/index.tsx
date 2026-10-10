@@ -1043,9 +1043,6 @@ export default function CreatePage() {
     return <>
         <div className="creation-home relative flex h-full min-h-0 flex-col overflow-hidden">
             {isEmpty ? <>
-                <div className="creation-top-actions">
-                    <Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" aria-expanded={historyOpen} className="creation-top-action" onClick={() => setHistoryOpen(true)}><History /></button></Tooltip>
-                </div>
                 <AnimatePresence>
                     {launchpadCondensed && !agentMode ? <motion.div className="creation-floating-prompt" key="floating-prompt"
                         style={{ x: "-50%" }}
@@ -1066,7 +1063,10 @@ export default function CreatePage() {
                 </div>
                 <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">
                     <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
-                        <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
+                        <div className="creation-home-composer-toolbar">
+                            <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
+                            <div className="creation-home-history-action"><Tooltip title="历史对话"><button type="button" aria-label="查看历史对话" aria-expanded={historyOpen} className="creation-top-action" onClick={() => setHistoryOpen(true)}><History /></button></Tooltip></div>
+                        </div>
                         {agentMode ? <CreationAgentEntry /> : <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" onPromptGrowthChange={setPromptHeightGrowth} /></div>}
                     </div>
                     <CreationEmptySuggest
