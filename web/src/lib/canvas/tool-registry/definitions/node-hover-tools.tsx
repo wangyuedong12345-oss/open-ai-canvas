@@ -19,10 +19,11 @@ function hasVideo(ctx: ToolContext) { return isVideo(ctx) && hasMediaPayload(ctx
 function hasAudio(ctx: ToolContext) { return isAudio(ctx) && Boolean(ctx.nodeMetadata?.content || ctx.nodeMetadata?.storageKey); }
 function isCharacterReference(ctx: ToolContext) { return isText(ctx) && ctx.nodeMetadata?.workflowKind === "character" && Boolean(ctx.nodeMetadata?.characterAssetId); }
 function isEditableText(ctx: ToolContext) { return isText(ctx) && !isCharacterReference(ctx); }
-function canOpenDialog(ctx: ToolContext) { return isEditableText(ctx) || (isImage(ctx) && !isCanvasImageSourceNode(ctx.node)) || isVideo(ctx); }
+function canOpenDialog(ctx: ToolContext) { return isEditableText(ctx) || (isImage(ctx) && !isCanvasImageSourceNode(ctx.node)); }
 function simpleMode(ctx: ToolContext) { return ctx.workspaceMode === "simple"; }
 function isImageBatchRoot(ctx: ToolContext) { return isImage(ctx) && Boolean(ctx.nodeMetadata?.isBatchRoot && ctx.nodeMetadata.batchChildIds?.length); }
 function canRetry(ctx: ToolContext) {
+    if (ctx.node?.type === CanvasNodeType.DirectorDesk) return false;
     if (ctx.nodeMetadata?.fileUpload) return false;
     const requiresPromptChange = ctx.nodeMetadata?.generationErrorCode === CONTENT_MODERATION_ERROR_CODE || isContentModerationError(ctx.nodeMetadata?.errorDetails);
     const batchHasFailures = isImageBatchRoot(ctx) && (ctx.nodeMetadata?.batchFailedCount || (ctx.nodeMetadata?.status === "error" ? 1 : 0)) > 0;
@@ -41,7 +42,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         defaultVisible: true,
         defaultOrder: 10,
         nodeToolbar: {
-            group: (ctx) => isCharacterReference(ctx) || (!isImage(ctx) && !isVideo(ctx) && !isAudio(ctx) && !isEditableText(ctx) && !isConfig(ctx)) ? "primary" : "more",
+            group: (ctx) => ctx.node?.type === CanvasNodeType.DirectorDesk ? "more" : isCharacterReference(ctx) || (!isImage(ctx) && !isVideo(ctx) && !isAudio(ctx) && !isEditableText(ctx) && !isConfig(ctx)) ? "primary" : "more",
             order: 10,
             section: "节点管理",
         },
@@ -268,7 +269,7 @@ export const nodeHoverToolbarTools: ToolDefinition[] = [
         icon: <Clapperboard className="size-3.5" />,
         defaultVisible: true,
         defaultOrder: 148,
-        nodeToolbar: { group: "workspace", order: 30, section: "项目剪辑", description: "打开项目时间线，定位到当前素材" },
+        nodeToolbar: { group: "workspace", order: 30, section: "节点剪辑", description: "编辑当前节点的独立时间线，可手动添加其他素材" },
         applicable: (ctx) => hasVideo(ctx) || hasAudio(ctx),
         run: (ctx) => ctx.handlers.onNodeTimeline(ctx.node!),
     },

@@ -97,7 +97,10 @@ export function EmptyImageContent({ node, theme, isBatchRoot, batchCount, batchP
 export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlayRequest }: CanvasNodeContentProps) {
     const playerBoxRef = useRef<HTMLDivElement>(null);
     const { updateMediaNode } = useCanvasNodeActions();
-    const { url, loading, onError } = useVideoPlaybackUrl(node, mediaActive);
+    const [playbackSource, setPlaybackSource] = useState<{ content?: string; storageKey?: string } | null>(null);
+    // 节点选中或复用 ID 回流新视频都不代表点击播放；明确播放只绑定当时的素材。
+    const playbackRequested = Boolean(mediaActive && playbackSource && playbackSource.content === node.metadata?.content && playbackSource.storageKey === node.metadata?.storageKey);
+    const { url, loading, onError } = useVideoPlaybackUrl(node, playbackRequested);
     const preview = canvasNodeVideoPreviewReference(node);
     const subtitleEntries = node.metadata?.subtitleEntries || [];
     const subtitleStyle = node.metadata?.subtitleStyle || createDefaultSubtitleStyle();
@@ -108,6 +111,14 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
     useEffect(() => {
         setVideoReady(false);
     }, [url]);
+
+    useEffect(() => {
+        setPlaybackSource(null);
+    }, [node.id, node.metadata?.content, node.metadata?.storageKey]);
+
+    useEffect(() => {
+        if (!mediaActive) setPlaybackSource(null);
+    }, [mediaActive]);
 
     useEffect(() => {
         const box = playerBoxRef.current;
@@ -132,7 +143,10 @@ export function VideoNodeContent({ node, theme, mediaActive = false, onMediaPlay
     }, [node.id, node.metadata?.naturalHeight, node.metadata?.naturalWidth, subtitleEntries.length, updateMediaNode, url]);
 
     if (!node.metadata?.content && !node.metadata?.storageKey) return <EmptyMediaContent icon={<Video className="size-7 opacity-35" />} label="空视频节点" color={theme.node.placeholder} />;
-    if (!mediaActive) return <InactiveVideoPreview node={node} theme={theme} onPlay={() => onMediaPlayRequest?.(node.id)} />;
+    if (!playbackRequested) return <InactiveVideoPreview node={node} theme={theme} onPlay={() => {
+        setPlaybackSource({ content: node.metadata?.content, storageKey: node.metadata?.storageKey });
+        onMediaPlayRequest?.(node.id);
+    }} />;
 
     const sourceRatio = (videoSize?.width || node.metadata?.naturalWidth || node.width) / Math.max(1, videoSize?.height || node.metadata?.naturalHeight || node.height);
     const fitHeight = Math.min(node.height, node.width / Math.max(0.01, sourceRatio));

@@ -6,12 +6,14 @@ import { imageMetadata, videoMetadata } from "@/lib/canvas/canvas-generation-tas
 import { fitNodeSize } from "@/lib/canvas/canvas-node-size";
 import { createCanvasNode } from "@/lib/canvas/canvas-project-domain";
 import { createPrevisSceneFromTemplate, type PrevisTemplateId } from "@/lib/canvas/previs/previs-templates";
-import { mergePrevisOutputPreview, upsertPrevisSceneById } from "@/lib/canvas/previs/previs-session";
+import { upsertPrevisSceneById } from "@/lib/canvas/previs/previs-session";
+import { applyPrevisMediaOutput } from "@/lib/canvas/previs/previs-output";
+import { isDirectorDeskNode, nextDirectorDeskNodeIndex } from "@/lib/canvas/previs/previs-node";
 import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile } from "@/services/file-storage";
 import { ensureCanvasNodeAsset } from "@/services/project-asset-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasNodeMetadata, type Position } from "@/types/canvas";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type Position } from "@/types/canvas";
 import type { PrevisScene, PrevisSceneOutput } from "@/types/previs";
 
 type UseCanvasPrevisOptions = {
@@ -80,23 +82,21 @@ export function useCanvasPrevis({
      * 否则又会回到「无条件塞一个默认演员」的老问题。
      */
     const createPrevisShot = useCallback((templateId: PrevisTemplateId, position?: Position) => {
-        const shots = nodesRef.current.filter((node) => node.metadata?.workflowKind === "shot");
-        const shotIndex = Math.max(0, ...shots.map((node) => node.metadata?.shotIndex || 0)) + 1;
-        let scene = createPrevisSceneFromTemplate(templateId, `镜头 ${shotIndex}`);
+        const shotIndex = nextDirectorDeskNodeIndex(nodesRef.current);
+        const title = `导演台 ${shotIndex}`;
+        let scene = createPrevisSceneFromTemplate(templateId, title);
         const shot = scene.shots[0];
         scene = { ...scene, shots: [{ ...shot, name: `镜头 ${shotIndex}` }] };
-        const node = createCanvasNode(CanvasNodeType.Video, position || getCanvasCenter(), {
+        const node = createCanvasNode(CanvasNodeType.DirectorDesk, position || getCanvasCenter(), {
             workflowKind: "shot",
-            workflowTitle: `镜头 ${shotIndex}`,
+            workflowTitle: title,
             shotIndex,
-            generationMode: "video",
-            videoEditOperation: "text_to_video",
             status: NODE_STATUS_IDLE,
             composerContent: "",
             previsSceneId: scene.id,
             previsShotId: shot.id,
         });
-        node.title = `镜头 ${shotIndex}`;
+        node.title = title;
         node.width = PREVIS_NODE_SIZE.width;
         node.height = PREVIS_NODE_SIZE.height;
         const nextNodes = [...nodesRef.current, node];
@@ -105,12 +105,12 @@ export function useCanvasPrevis({
         setSelectedNodeIds(new Set([node.id]));
         setSelectedConnectionId(null);
         updateProject(projectId, { previsScenes: upsertPrevisSceneById(currentPrevisScenes(projectId, previsScenes), scene) });
-        message.success("已创建预演台节点，点击缩略图进入编辑");
+        message.success("已创建导演台节点，点击缩略图进入编辑");
     }, [previsScenes, getCanvasCenter, message, nodesRef, projectId, setNodes, setSelectedConnectionId, setSelectedNodeIds, updateProject]);
 
     const openPrevisWorkbench = useCallback((nodeId: string) => {
         const node = nodesRef.current.find((item) => item.id === nodeId);
-        if (!node || node.metadata?.workflowKind !== "shot") return;
+        if (!node || (!isDirectorDeskNode(node) && node.metadata?.workflowKind !== "shot")) return;
         if (shouldUpgradePrevisNodeSize(node)) {
             const upgradedNodes = nodesRef.current.map((item) => item.id === nodeId ? { ...item, width: PREVIS_NODE_SIZE.width, height: PREVIS_NODE_SIZE.height } : item);
             nodesRef.current = upgradedNodes;
@@ -142,93 +142,36 @@ export function useCanvasPrevis({
         const sourceNodeAtStart = nodesRef.current.find((item) => item.id === previsNodeId);
         if (!sourceNodeAtStart || sourceNodeAtStart.metadata?.previsSceneId !== output.scene.id) throw new Error("镜头节点不存在或场景已切换");
         const sourceNodeId = sourceNodeAtStart.id;
+        if (!output.clayVideo && !output.beauty) throw new Error("导演台没有返回构图或视频文件");
         const [image, videoUpload] = await Promise.all([
-            uploadImage(output.beauty),
+            !output.clayVideo && output.beauty ? uploadImage(output.beauty) : Promise.resolve(null),
             output.clayVideo ? uploadMediaFile(output.clayVideo, "previs-clay") : Promise.resolve(null),
         ]);
         // 上传期间项目、节点和镜头都可能变化。以当前权威状态重新核验并合并，
         // 不允许旧输出写入另一项目，也不允许旧 scene 快照覆盖并发编辑。
-        const outputProject = useCanvasStore.getState().projects.find((item) => item.id === outputProjectId);
-        const sourceNode = nodesRef.current.find((item) => item.id === sourceNodeId);
-        const latestScene = outputProject?.previsScenes.find((item) => item.id === output.scene.id);
-        if (projectIdRef.current !== outputProjectId || !outputProject || !sourceNode || sourceNode.metadata?.previsSceneId !== output.scene.id || !latestScene || !latestScene.shots.some((shot) => shot.id === output.shot.id)) throw new Error("输出期间项目或镜头已切换、删除，请重试");
-        const previewId = sourceNode.metadata?.previsPreviewNodeId || `image-previs-${Date.now()}`;
-        const mergedScene = mergePrevisOutputPreview(latestScene, { sceneId: output.scene.id, shotId: output.shot.id, previewNodeId: previewId });
-        if (!mergedScene) throw new Error("输出期间镜头已切换或删除，请重试");
-        const previewSize = fitNodeSize(image.width, image.height);
-        const nextNodes = [...nodesRef.current];
-        const previewIndex = nextNodes.findIndex((item) => item.id === previewId);
-        const existingPreview = previewIndex >= 0 ? nextNodes[previewIndex] : null;
-        const previewNode: CanvasNodeData = {
-            ...existingPreview,
-            id: previewId,
-            type: CanvasNodeType.Image,
-            title: `${sourceNode.title} · 预演台构图`,
-            position: existingPreview?.position || { x: sourceNode.position.x - previewSize.width - 36, y: sourceNode.position.y },
-            width: previewSize.width,
-            height: previewSize.height,
-            metadata: { ...existingPreview?.metadata, ...imageMetadata(image), prompt: output.prompt, workflowKind: "reference_set", assetTags: ["预演台构图", `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
+        const currentOutputContext = () => {
+            const outputProject = useCanvasStore.getState().projects.find((item) => item.id === outputProjectId);
+            const sourceNode = nodesRef.current.find((item) => item.id === sourceNodeId);
+            const latestScene = outputProject?.previsScenes.find((item) => item.id === output.scene.id);
+            if (projectIdRef.current !== outputProjectId || !outputProject || !sourceNode || sourceNode.metadata?.previsSceneId !== output.scene.id || !latestScene || !latestScene.shots.some((shot) => shot.id === output.shot.id)) throw new Error("输出期间项目或镜头已切换、删除，请重试");
+            return { source: sourceNode, scene: latestScene, nodes: nodesRef.current, connections: connectionsRef.current, shot: output.shot, prompt: output.prompt };
         };
-        if (previewIndex >= 0) nextNodes[previewIndex] = previewNode;
-        else nextNodes.push(previewNode);
-
-        let clayVideoId = sourceNode.metadata?.previsClayVideoNodeId;
+        const initialContext = currentOutputContext();
+        const referenceKey = image ? "previsPreviewNodeId" : "previsClayVideoNodeId";
+        const nodeId = initialContext.source.metadata?.[referenceKey] || `${image ? "image-previs" : "video-previs-clay"}-${nanoid()}`;
         const videoLabel = output.videoKind === "depth" ? "深度视频" : output.videoKind === "color" ? "普通视频" : "白模视频";
-        if (videoUpload) {
-            clayVideoId ||= `video-previs-clay-${Date.now()}`;
-            const videoIndex = nextNodes.findIndex((item) => item.id === clayVideoId);
-            const existingVideo = videoIndex >= 0 ? nextNodes[videoIndex] : null;
-            const videoNode: CanvasNodeData = {
-                ...existingVideo,
-                id: clayVideoId,
-                type: CanvasNodeType.Video,
-                title: `${sourceNode.title} · ${videoLabel}`,
-                position: existingVideo?.position || { x: sourceNode.position.x, y: sourceNode.position.y + sourceNode.height + 48 },
-                width: existingVideo?.width || 360,
-                height: existingVideo?.height || 220,
-                metadata: { ...existingVideo?.metadata, ...videoMetadata(videoUpload), prompt: output.prompt, workflowKind: "reference_video", assetTags: [`预演台${videoLabel}`, `镜头:${sourceNode.title}`], producedModel: undefined, producedModelCandidate: undefined },
-            };
-            if (videoIndex >= 0) nextNodes[videoIndex] = videoNode;
-            else nextNodes.push(videoNode);
-        }
-
-        const nextConnections = [...connectionsRef.current];
-        [previewId, videoUpload ? clayVideoId : null].filter((id): id is string => Boolean(id)).forEach((id) => {
-            if (!nextConnections.some((connection) => connection.fromNodeId === id && connection.toNodeId === sourceNode.id)) nextConnections.push({ id: nanoid(), fromNodeId: id, toNodeId: sourceNode.id });
-        });
-        const retiredReferenceIds = new Set([sourceNode.metadata?.previsDepthNodeId, sourceNode.metadata?.previsNormalNodeId].filter(Boolean));
-        const referenceAssetNodeIds = Array.from(new Set([
-            ...(sourceNode.metadata?.referenceAssetNodeIds || []).filter((id) => !retiredReferenceIds.has(id)),
-            previewId,
-            ...(clayVideoId ? [clayVideoId] : []),
-        ]));
-        const previsMetadata: Partial<CanvasNodeMetadata> = {
-            previsSceneId: output.scene.id,
-            previsShotId: output.shot.id,
-            previsPreviewNodeId: previewId,
-            previsDepthNodeId: undefined,
-            previsNormalNodeId: undefined,
-            previsClayVideoNodeId: clayVideoId,
-            composerContent: output.prompt,
-            prompt: output.prompt,
-            videoCameraMoveId: output.shot.cameraMove,
-            videoCameraMovePrompt: output.prompt,
-            referenceAssetNodeIds,
-        };
-        const mediaNodes = nextNodes.filter((item) => item.id === previewId || Boolean(clayVideoId && item.id === clayVideoId));
-        const assetIds = new Map<string, string>();
-        for (const mediaNode of mediaNodes) {
-            const result = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: mediaNode, source: "canvas-manual" });
-            assetIds.set(mediaNode.id, result.assetId);
-        }
-        const finalizedNodes = nextNodes.map((item) => {
-            const assetId = assetIds.get(item.id);
-            if (assetId) return { ...item, metadata: { ...item.metadata, assetId } };
-            return item.id === sourceNode.id ? { ...item, metadata: { ...item.metadata, ...previsMetadata } } : item;
-        });
-        nodesRef.current = finalizedNodes;
+        const media = image
+            ? { id: nodeId, type: CanvasNodeType.Image as const, label: "预演台构图", ...fitNodeSize(image.width, image.height), metadata: imageMetadata(image) }
+            : { id: nodeId, type: CanvasNodeType.Video as const, label: videoLabel, width: 360, height: 220, metadata: videoMetadata(videoUpload!) };
+        const first = applyPrevisMediaOutput({ ...initialContext, media });
+        const asset = await ensureCanvasNodeAsset({ canvasId: projectId, domainProjectId, node: first.mediaNode, source: "canvas-manual" });
+        // 素材登记也可能跨越异步编辑，提交前重新读取节点、连线与场景。
+        const latestContext = currentOutputContext();
+        if (latestContext.source.metadata?.[referenceKey] !== initialContext.source.metadata?.[referenceKey]) throw new Error("输出期间产物引用已有其他更新，请重试");
+        const { nodes: nextNodes, connections: nextConnections, scene: mergedScene } = applyPrevisMediaOutput({ ...latestContext, media: { ...media, metadata: { ...media.metadata, assetId: asset.assetId } } });
+        nodesRef.current = nextNodes;
         connectionsRef.current = nextConnections;
-        setNodes(finalizedNodes);
+        setNodes(nextNodes);
         setConnections(nextConnections);
         savePrevisScene(mergedScene);
     }, [connectionsRef, previsNodeId, domainProjectId, nodesRef, projectId, savePrevisScene, setConnections, setNodes]);

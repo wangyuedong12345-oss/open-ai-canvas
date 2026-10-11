@@ -2,6 +2,7 @@ package canvas
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -202,5 +203,29 @@ func TestCanvasMediaAssetReferencesCollectsNodesAndTimeline(t *testing.T) {
 	}
 	if references[1].AssetID != "asset-audio" || references[1].ResourceID != "resource-audio" {
 		t.Fatalf("timeline reference = %#v", references[1])
+	}
+}
+
+func TestCanvasMediaAssetReferencesCollectsNodeTimeline(t *testing.T) {
+	raw := json.RawMessage(`{"nodes":[{"id":"video-owner","type":"video","metadata":{"timeline":{"clips":[
+        {"directMedia":{"kind":"audio","assetId":"asset-audio","storageKey":"resource:resource-audio"}},
+        {"directMedia":{"kind":"video","assetId":"asset-video","url":"/api/resources/resource-video/file"}},
+        {"directMedia":{"kind":"text","content":"/api/resources/not-media/file"}}
+    ]}}}]}`)
+	references, err := MediaAssetReferences(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(references) != 2 {
+		t.Fatalf("references = %#v", references)
+	}
+	for index, reference := range references {
+		expectedPath := "nodes[video-owner].metadata.timeline.clips[" + strconv.Itoa(index) + "].directMedia"
+		if reference.NodeID != "video-owner" || reference.Path != expectedPath || reference.ReferenceType != "directMedia" {
+			t.Fatalf("reference = %#v", reference)
+		}
+	}
+	if references[0].AssetID != "asset-audio" || references[0].ResourceID != "resource-audio" || references[1].AssetID != "asset-video" || references[1].ResourceID != "resource-video" {
+		t.Fatalf("references = %#v", references)
 	}
 }

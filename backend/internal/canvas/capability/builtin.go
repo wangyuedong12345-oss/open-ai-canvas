@@ -49,6 +49,17 @@ func BuiltinRegistry() *Registry {
 		generatedMediaDescriptor("video", "2", "视频", 720, 405, "video", ConnectionPolicy{
 			CanSource: true, CanTarget: true, CanReference: true, AcceptedInputKinds: []string{"text", "image", "video", "audio", "character"},
 		}),
+		{
+			Type: "director-desk", Version: "1", Label: "导演台", DefaultWidth: 520, DefaultHeight: 340,
+			Purpose:    "承载 DirectorDesk 三维场景；通过 previs_scene_create 创建并绑定场景，通过预演工具读取和编辑，导出图片或视频为独立媒体节点。",
+			Actions:    []string{"previs_scene_read", "previs_apply_patch", "director_preview"},
+			Connection: ConnectionPolicy{CanTarget: true, AcceptedInputKinds: []string{"image", "video"}},
+			CanUpdate:  true, PatchFields: titleAndPositionPatchFields(),
+			SummaryFields: []string{"previsSceneId", "previsShotId"}, DetailFields: []string{"previsSceneId", "previsShotId"},
+			CreateMetadata: func(string) map[string]any {
+				return map[string]any{"status": "idle", "workflowKind": "shot"}
+			},
+		},
 		generatedMediaDescriptor("audio", "2", "音频", 340, 120, "audio", ConnectionPolicy{
 			CanSource: true, CanTarget: true, CanReference: true, MaxInputCount: 1, AcceptedInputKinds: []string{"text", "character"},
 		}),

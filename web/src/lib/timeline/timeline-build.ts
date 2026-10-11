@@ -1,9 +1,9 @@
 // 从画布节点构建时间线数据：视频/音频节点自动入轨，字幕条目转成字幕片段。
 // 构建是单向快照：时间线保存后用户可自由拖拽，重新构建不覆盖已有时间线。
 
-import type { CanvasNodeData } from "@/types/canvas";
+import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
 import type { SrtEntry, TimelineClip, TimelineProject } from "@/types/timeline";
-import { DEFAULT_AUDIO_TRACK_ID, DEFAULT_SUBTITLE_TRACK_ID, DEFAULT_VIDEO_TRACK_ID, createDefaultTracks } from "./timeline-tracks";
+import { DEFAULT_AUDIO_TRACK_ID, DEFAULT_SUBTITLE_TRACK_ID, DEFAULT_VIDEO_TRACK_ID, createDefaultTracks, normalizeTimelineProject } from "./timeline-tracks";
 import { getTimelineVisualEndMs } from "./timeline-view";
 
 function nodeDurationMs(node: CanvasNodeData, fallbackMs = 4_000): number {
@@ -87,6 +87,34 @@ export function buildTimelineFromNodes(nodes: CanvasNodeData[]): TimelineProject
     };
 }
 
+/** 从节点独立剪辑恢复草稿，首次只加入当前素材。 */
+export function buildNodeTimelineDraft(node: CanvasNodeData): TimelineProject {
+    // 已保存的空轨道和删除结果也必须保留，不能在重开时重新补入源视频。
+    return node.metadata?.timeline ? normalizeTimelineProject(node.metadata.timeline) : buildTimelineFromNodes([node]);
+}
+
+/** 保存当前剪辑，只回写拥有者的字幕，不修改手动加入的源节点。 */
+export function buildNodeTimelineMetadata(node: CanvasNodeData, draft: TimelineProject): Partial<CanvasNodeMetadata> {
+    const hasSubtitles = Boolean(node.metadata?.subtitleEntries?.length);
+    const clips = hasSubtitles ? draft.clips : draft.clips.filter((clip) => !(clip.kind === "subtitle" && clip.nodeId === node.id));
+    const timeline = normalizeTimelineProject({ ...draft, clips, updatedAt: new Date().toISOString() });
+    if (node.type !== "video") return { timeline };
+    const baseMs = timeline.clips.find((clip) => clip.kind === "video" && clip.nodeId === node.id)?.startMs ?? 0;
+    const subtitleEntries = hasSubtitles ? timeline.clips
+        .filter((clip) => clip.kind === "subtitle" && clip.nodeId === node.id && Boolean(clip.text))
+        .sort((a, b) => a.startMs - b.startMs)
+        .map((clip, index) => ({
+            index: index + 1,
+            startMs: Math.max(0, Math.round(clip.startMs - baseMs)),
+            endMs: Math.max(0, Math.round(clip.startMs + clip.durationMs - baseMs)),
+            text: (clip.text || "").trim(),
+        })) : [];
+    return {
+        timeline, subtitleEntries, subtitleUpdatedAt: timeline.updatedAt,
+        ...(subtitleEntries.length ? {} : { subtitleHighlights: [] }),
+    };
+}
+
 /** 判断某个节点是否已经出现在时间线中（按 nodeId 去重）。 */
 export function isNodeInTimeline(nodeId: string, timeline: TimelineProject | null | undefined): boolean {
     return Boolean(timeline?.clips.some((clip) => clip.nodeId === nodeId));
@@ -110,7 +138,7 @@ export function ensureNodeInTimeline(timeline: TimelineProject, node: CanvasNode
 }
 
 /**
- * 将节点字幕条目同步回项目时间线：按视频片段起点偏移重建该节点的字幕片段；
+ * 将节点字幕条目同步回其独立剪辑：按视频片段起点偏移重建该节点的字幕片段；
  * 条目为空数组时移除该节点全部字幕片段，保证字幕弹窗与时间线互通。
  */
 export function syncNodeSubtitlesToTimeline(timeline: TimelineProject, nodeId: string, entries: SrtEntry[]): TimelineProject {

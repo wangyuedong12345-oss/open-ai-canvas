@@ -2,7 +2,7 @@
 
 import { useMemo, useRef } from "react";
 
-import { formatTimelineTime, getRulerTickStep } from "@/lib/timeline/timeline-view";
+import { formatTimelineTime, getRulerTickStep, getTimelinePointerTime } from "@/lib/timeline/timeline-view";
 import type { CanvasTheme } from "@/lib/canvas-theme";
 
 type CanvasTimelineRulerProps = {
@@ -31,8 +31,7 @@ export function CanvasTimelineRuler({ pxPerMs, durationMs, playheadMs, width, th
     const seekFromEvent = (clientX: number) => {
         const rect = barRef.current?.getBoundingClientRect();
         if (!rect) return;
-        const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(1, rect.width)));
-        onSeek(Math.round(ratio * durationMs));
+        onSeek(getTimelinePointerTime({ clientX, left: rect.left, renderedWidth: rect.width, trackWidth: width, pxPerMs, durationMs }));
     };
 
     return (
@@ -41,6 +40,8 @@ export function CanvasTimelineRuler({ pxPerMs, durationMs, playheadMs, width, th
             className="relative shrink-0 cursor-col-resize select-none overflow-hidden border-b"
             style={{ height: 32, borderColor: theme.toolbar.border, background: theme.toolbar.panel }}
             onPointerDown={(event) => {
+                if (!event.isPrimary || event.button !== 0) return;
+                event.preventDefault();
                 draggingRef.current = true;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 seekFromEvent(event.clientX);
@@ -50,8 +51,10 @@ export function CanvasTimelineRuler({ pxPerMs, durationMs, playheadMs, width, th
             }}
             onPointerUp={(event) => {
                 draggingRef.current = false;
-                event.currentTarget.releasePointerCapture(event.pointerId);
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
             }}
+            onPointerCancel={() => { draggingRef.current = false; }}
+            onLostPointerCapture={() => { draggingRef.current = false; }}
         >
             {ticks.map((tick) => (
                 <div key={tick.ms} className="absolute top-0 h-full" style={{ left: tick.x }}>

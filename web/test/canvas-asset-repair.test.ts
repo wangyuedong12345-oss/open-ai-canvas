@@ -130,6 +130,19 @@ describe("rebindInconsistentCanvasAssets 强制对齐", () => {
 });
 
 describe("collectCanvasMediaAssetIds", () => {
+    test("节点独立剪辑的直连素材参与收集、修复和强制重绑", () => {
+        const owner = videoNode("owner", "owner-asset", "resource:OWNER");
+        owner.metadata!.timeline = { version: 2, tracks: [], durationMs: 1_000, clips: [timelineClip("wrong-asset", "resource:CLIP")] };
+        useAssetStore.setState({ assets: [videoAsset("owner-asset", "resource:OWNER"), videoAsset("wrong-asset", "resource:OTHER"), videoAsset("clip-asset", "resource:CLIP")] });
+        useCanvasStore.setState({ projects: [project("canvas-1", [owner])] });
+        expect(collectCanvasMediaAssetIds(useCanvasStore.getState().projects)).toEqual(new Set(["owner-asset", "wrong-asset"]));
+        expect(repairMissingCanvasAssets().updatedProjects).toBe(1);
+        expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.timeline?.clips[0].directMedia?.assetId).toBe("clip-asset");
+        const result = rebindInconsistentCanvasAssets([videoAsset("owner-asset", "resource:OWNER"), videoAsset("replacement", "resource:CLIP")]);
+        expect(result).toMatchObject({ reboundNodes: 1, createdAssets: 0, updatedProjects: 1 });
+        expect(useCanvasStore.getState().projects[0].nodes[0].metadata?.timeline?.clips[0].directMedia?.assetId).toBe("replacement");
+    });
+
     test("只收集有资源身份的媒体节点与时间线片段声明", () => {
         const textNode: CanvasNodeData = { id: "node-text", type: CanvasNodeType.Text, title: "文本", position: { x: 0, y: 0 }, width: 200, height: 100, metadata: { content: "正文", assetId: "text-asset" } };
         const pendingNode = videoNode("node-pending", undefined, "resource:R3");

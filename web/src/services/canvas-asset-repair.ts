@@ -1,4 +1,5 @@
 import { canvasNodeToAsset } from "@/lib/canvas/canvas-node-asset";
+import { collectCanvasTimelines, mapCanvasTimelines } from "@/lib/canvas/canvas-timelines";
 import { refreshResource, resourceIdFromStorageKey } from "@/services/api/resources";
 import { ApiError } from "@/services/api/request";
 import { useAssetStore, type Asset, type NewAsset } from "@/stores/use-asset-store";
@@ -40,7 +41,7 @@ export function repairMissingCanvasAssets(projectIds?: Set<string>, partialAsset
                     if (node.metadata.storageKey && !storageKeyByAssetId.has(node.metadata.assetId)) storageKeyByAssetId.set(node.metadata.assetId, node.metadata.storageKey);
                 }
             }
-            for (const clip of project.timeline?.clips || []) {
+            for (const clip of collectCanvasTimelines(project).flatMap((timeline) => timeline.clips)) {
                 if (clip.directMedia?.assetId) {
                     knownAssetIds.add(clip.directMedia.assetId);
                     if (clip.directMedia.storageKey && !storageKeyByAssetId.has(clip.directMedia.assetId)) storageKeyByAssetId.set(clip.directMedia.assetId, clip.directMedia.storageKey);
@@ -84,20 +85,20 @@ function repairProject(
         changed = true;
         return { ...node, metadata: { ...node.metadata, assetId } };
     });
-    const timeline = project.timeline
-        ? {
-              ...project.timeline,
-              clips: project.timeline.clips.map((clip) => {
-                  const media = clip.directMedia;
-                  if (!media || media.kind === "text" || !mediaContent(media)) return clip;
-                  const assetId = matchingAssetId(media.assetId, media.storageKey, knownAssetIds, assetIdByStorageKey, storageKeyByAssetId) || createAsset(timelineMediaNode(media));
-                  if (!assetId || media.assetId === assetId) return clip;
-                  changed = true;
-                  return { ...clip, directMedia: { ...media, assetId } };
-              }),
-          }
-        : project.timeline;
-    return changed ? { nodes, timeline } : null;
+    const repaired = mapCanvasTimelines({ ...project, nodes }, (timeline) => {
+        let timelineChanged = false;
+        const clips = timeline.clips.map((clip) => {
+            const media = clip.directMedia;
+            if (!media || media.kind === "text" || !(media.storageKey || mediaContent(media))) return clip;
+            const assetId = matchingAssetId(media.assetId, media.storageKey, knownAssetIds, assetIdByStorageKey, storageKeyByAssetId) || createAsset(timelineMediaNode(media));
+            if (!assetId || media.assetId === assetId) return clip;
+            changed = true;
+            timelineChanged = true;
+            return { ...clip, directMedia: { ...media, assetId } };
+        });
+        return timelineChanged ? { ...timeline, clips } : timeline;
+    });
+    return changed ? repaired : null;
 }
 
 function matchingAssetId(explicitId: string | undefined, storageKey: string | undefined, knownAssetIds: Set<string>, assetIdByStorageKey: Map<string, string>, storageKeyByAssetId: Map<string, string>) {
@@ -257,23 +258,23 @@ export function rebindInconsistentCanvasAssets(records: Asset[], projectIds?: Se
             projectChanged = true;
             return { ...node, metadata: { ...node.metadata, assetId } };
         });
-        const timeline = project.timeline
-            ? {
-                  ...project.timeline,
-                  clips: project.timeline.clips.map((clip) => {
-                      const media = clip.directMedia;
-                      const identity = media && media.kind !== "text" ? mediaNodeIdentity(media.storageKey, mediaContent(media)) : undefined;
-                      if (!media || !identity) return clip;
-                      const assetId = resolveAssetId(media.assetId, identity, () => canvasNodeToAsset(timelineMediaNode(media), { canvasId: project.id, source: "canvas-manual" }));
-                      if (!assetId || media.assetId === assetId) return clip;
-                      reboundNodes += 1;
-                      projectChanged = true;
-                      return { ...clip, directMedia: { ...media, assetId } };
-                  }),
-              }
-            : project.timeline;
+        const repaired = mapCanvasTimelines({ ...project, nodes }, (timeline) => {
+            let timelineChanged = false;
+            const clips = timeline.clips.map((clip) => {
+                const media = clip.directMedia;
+                const identity = media && media.kind !== "text" ? mediaNodeIdentity(media.storageKey, mediaContent(media)) : undefined;
+                if (!media || !identity) return clip;
+                const assetId = resolveAssetId(media.assetId, identity, () => canvasNodeToAsset(timelineMediaNode(media), { canvasId: project.id, source: "canvas-manual" }));
+                if (!assetId || media.assetId === assetId) return clip;
+                reboundNodes += 1;
+                projectChanged = true;
+                timelineChanged = true;
+                return { ...clip, directMedia: { ...media, assetId } };
+            });
+            return timelineChanged ? { ...timeline, clips } : timeline;
+        });
         if (!projectChanged) continue;
-        canvasStore.updateProject(project.id, { nodes, timeline });
+        canvasStore.updateProject(project.id, repaired);
         updatedProjects += 1;
     }
     return { reboundNodes, createdAssets, updatedProjects };
@@ -286,7 +287,7 @@ export function collectCanvasMediaAssetIds(projects: CanvasProject[]): Set<strin
         for (const node of project.nodes) {
             if (isCanvasMediaNodeType(node) && node.metadata?.assetId && mediaNodeIdentity(node.metadata.storageKey, node.metadata.content)) ids.add(node.metadata.assetId);
         }
-        for (const clip of project.timeline?.clips || []) {
+        for (const clip of collectCanvasTimelines(project).flatMap((timeline) => timeline.clips)) {
             const media = clip.directMedia;
             if (media?.assetId && media.kind !== "text" && mediaNodeIdentity(media.storageKey, mediaContent(media))) ids.add(media.assetId);
         }

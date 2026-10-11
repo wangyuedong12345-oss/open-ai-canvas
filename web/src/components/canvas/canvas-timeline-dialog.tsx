@@ -2,7 +2,7 @@ import { App, Button, Dropdown, Input, InputNumber, Progress } from "antd";
 import { AppModal } from "@/components/ui/product/app-modal";
 import { Tooltip } from "@/components/ui/base/tooltip";
 // 二期：多轨时间线编辑弹窗。
-// 数据源是项目级 TimelineProject：视频/音频节点自动入轨，字幕条目转字幕片段。
+// 数据源是当前节点的独立剪辑：首次只加入当前素材，其他音视频由用户添加。
 // 交互：拖拽移动片段（吸附播放头/片段边缘）、左右边缘裁剪、删除、播放头跳转。
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
@@ -15,15 +15,15 @@ import { CanvasTimelinePreview } from "./canvas-timeline-preview";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { isCanvasTextEditingTarget } from "@/lib/canvas/canvas-keyboard-scope";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
-import { buildTimelineFromNodes, ensureNodeInTimeline, isNodeInTimeline, syncTimelineSubtitleClips } from "@/lib/timeline/timeline-build";
+import { buildTimelineFromNodes, buildNodeTimelineDraft, buildNodeTimelineMetadata, isNodeInTimeline } from "@/lib/timeline/timeline-build";
 import { canPlaceAt, clampClipDurationByNeighbors, findNearestAvailablePlacement } from "@/lib/timeline/timeline-placement";
 import { computeSnap } from "@/lib/timeline/timeline-snap";
 import { DEFAULT_AUDIO_TRACK_ID, DEFAULT_VIDEO_TRACK_ID, normalizeTimelineProject } from "@/lib/timeline/timeline-tracks";
 import { formatTimelineTime, getTimelineTrackWidth, getFitTimelineZoom, zoomIn, zoomOut } from "@/lib/timeline/timeline-view";
 import { exportTimelineToMp4 } from "@/lib/timeline/timeline-export";
 import type { TimelineRenderSource } from "@/lib/timeline/timeline-to-ffmpeg";
-import type { CanvasNodeData } from "@/types/canvas";
-import type { SrtEntry, TimelineClip, TimelineDirectMedia, TimelineProject } from "@/types/timeline";
+import type { CanvasNodeData, CanvasNodeMetadata } from "@/types/canvas";
+import type { TimelineClip, TimelineDirectMedia, TimelineProject } from "@/types/timeline";
 
 const MIN_CLIP_DURATION_MS = 100;
 const TRACK_ROW_HEIGHT = 52;
@@ -34,11 +34,9 @@ type CanvasTimelineDialogProps = {
     node: CanvasNodeData;
     open: boolean;
     nodes: CanvasNodeData[];
-    timeline: TimelineProject | null;
     onClose: () => void;
     onOpenSubtitleDialog?: (nodeId: string) => void;
-    onSave: (timeline: TimelineProject) => void;
-    onSaveSubtitles: (nodeId: string, entries: SrtEntry[]) => void;
+    onSave: (patch: Partial<CanvasNodeMetadata>) => void;
     /** 打开项目素材库选择器（由页面层接线） */
     onOpenAssetLibrary?: () => void;
     /** 打开项目资产库选择器（由页面层接线） */
@@ -65,11 +63,9 @@ export function CanvasTimelineDialog({
     node,
     open,
     nodes,
-    timeline,
     onClose,
     onOpenSubtitleDialog,
     onSave,
-    onSaveSubtitles,
     onOpenAssetLibrary,
     onOpenProjectAssets,
     onUploadLocalFiles,
@@ -98,7 +94,7 @@ export function CanvasTimelineDialog({
 
     const initializedRef = useRef(false);
 
-    // 打开弹窗：优先复用项目时间线，否则从画布节点自动构建；播放头定位到触发节点片段。
+    // 打开弹窗：复用当前节点的剪辑，否则只从当前素材构建。
     // 仅首次打开时构建草稿：素材上传/素材库插入会触发 nodes 变化，不能因此重建草稿丢弃编辑。
     useEffect(() => {
         if (!open) {
@@ -107,9 +103,7 @@ export function CanvasTimelineDialog({
         }
         if (initializedRef.current) return;
         initializedRef.current = true;
-        const base = timeline ? normalizeTimelineProject(timeline) : buildTimelineFromNodes(nodes);
-        const synced = timeline ? syncTimelineSubtitleClips(base, nodes) : base;
-        const next = ensureNodeInTimeline(synced, node);
+        const next = buildNodeTimelineDraft(node);
         setDraft(next);
         setPlayheadMs(0);
         setZoomLevel(1);
@@ -117,7 +111,7 @@ export function CanvasTimelineDialog({
         setPreviewPlaying(false);
         const triggerClip = next.clips.find((clip) => clip.nodeId === node.id);
         if (triggerClip) setPlayheadMs(triggerClip.startMs);
-    }, [open, node.id, nodes, timeline]);
+    }, [open, node]);
 
     const pxPerMs = (BASE_PX_PER_SECOND / 1_000) * zoomLevel;
     const durationMs = Math.max(1_000, draft.durationMs);
@@ -465,25 +459,7 @@ export function CanvasTimelineDialog({
     };
 
     const handleSave = () => {
-        // 互通修复：时间线草稿只在打开时初始化，期间节点字幕可能在字幕弹窗中被清空（或节点数据被外部更新）。
-        // 保存前以节点当前字幕为准做定向校准：节点字幕已为空时，剔除草稿残留的旧字幕片段并回写空数组，
-        // 避免「清空后重开视频节点旧字幕复活」；节点仍有字幕时保留草稿内用户的时间线编辑（拖动/删减/文本）。
-        const clearedSubtitleNodeIds = new Set(nodes.filter((item) => (item.metadata?.subtitleEntries?.length ?? 0) === 0).map((item) => item.id));
-        const base = normalizeTimelineProject({ ...draft, updatedAt: new Date().toISOString() });
-        const reconciledClips = clearedSubtitleNodeIds.size ? base.clips.filter((clip) => !(clip.kind === "subtitle" && clearedSubtitleNodeIds.has(clip.nodeId))) : base.clips;
-        const normalized = normalizeTimelineProject({ ...base, clips: reconciledClips });
-        onSave(normalized);
-        // 整合方向：时间线字幕片段与节点字幕互通。保存时按视频节点回写 subtitleEntries（含空数组）。
-        // 回写集合 = 项目时间线原有字幕节点 ∪ 校准后仍有字幕片段的节点 ∪ 节点当前仍有字幕数据的节点：
-        // 覆盖“首次打开时间线（项目尚无 timeline）时删除字幕片段”这类 timeline 为空导致的漏回写，
-        // 保证删除全部字幕片段后节点字幕被同步清空，重开视频节点不再显示旧字幕。
-        const previousSubtitleNodeIds = new Set((timeline?.clips || []).filter((clip) => clip.kind === "subtitle").map((clip) => clip.nodeId));
-        const nextSubtitleNodeIds = new Set(normalized.clips.filter((clip) => clip.kind === "subtitle").map((clip) => clip.nodeId));
-        const nodeSubtitleNodeIds = new Set(nodes.filter((item) => (item.metadata?.subtitleEntries?.length ?? 0) > 0).map((item) => item.id));
-        const subtitleNodeIds = new Set([...previousSubtitleNodeIds, ...nextSubtitleNodeIds, ...nodeSubtitleNodeIds]);
-        subtitleNodeIds.forEach((subNodeId) => {
-            onSaveSubtitles(subNodeId, buildSubtitleEntriesForNode(subNodeId, normalized));
-        });
+        onSave(buildNodeTimelineMetadata(node, draft));
         message.success("时间线已保存");
         onClose();
     };
@@ -560,25 +536,6 @@ export function CanvasTimelineDialog({
     const selectedMediaMaxSourceStartMs = selectedMediaSourceDurationMs !== undefined ? Math.max(0, selectedMediaSourceDurationMs - (selectedMediaClip?.durationMs || 0)) : 3_600_000;
     const hasVideoClips = draft.clips.some((clip) => clip.kind === "video");
 
-    // 时间线全局时间 → 视频节点本地时间：以该节点视频片段起点为 0 基准重建 SrtEntry。
-    // source 传保存时校准后的时间线（normalized）：节点字幕已清空时直接回写空数组，
-    // 避免草稿残留的旧字幕片段把节点上已清空的字幕重新写回。
-    const buildSubtitleEntriesForNode = (subNodeId: string, source: TimelineProject = draft): SrtEntry[] => {
-        const currentNode = nodes.find((item) => item.id === subNodeId);
-        if ((currentNode?.metadata?.subtitleEntries?.length ?? 0) === 0) return [];
-        const videoClip = source.clips.find((clip) => clip.nodeId === subNodeId && clip.kind === "video");
-        const baseMs = videoClip?.startMs ?? 0;
-        return source.clips
-            .filter((clip) => clip.nodeId === subNodeId && clip.kind === "subtitle" && Boolean(clip.text))
-            .sort((a, b) => a.startMs - b.startMs)
-            .map((clip, index) => ({
-                index: index + 1,
-                startMs: Math.max(0, Math.round(clip.startMs - baseMs)),
-                endMs: Math.max(0, Math.round(clip.startMs + clip.durationMs - baseMs)),
-                text: (clip.text || "").trim(),
-            }));
-    };
-
     const trackLabel = (trackId: string) => draft.tracks.find((track) => track.id === trackId)?.label || trackId;
     const renderTrackRow = (trackId: string, label: string) => {
         const clips = draft.clips.filter((clip) => clip.trackId === trackId).sort((a, b) => a.startMs - b.startMs);
@@ -636,7 +593,7 @@ export function CanvasTimelineDialog({
             </span>
             <div className="min-w-0">
                 <div className="truncate text-[var(--fs-heading-lg)] font-semibold leading-6 tracking-[-0.02em]">多轨时间线</div>
-                <div className="truncate text-xs opacity-45">第二期 · 轨道编辑与素材编排</div>
+                <div className="truncate text-xs opacity-45">{node.title || (node.type === "audio" ? "音频" : "视频")} · 独立剪辑</div>
             </div>
         </div>
     );

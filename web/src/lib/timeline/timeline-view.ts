@@ -26,6 +26,19 @@ export function getTimelinePxPerMs(zoomLevel: number): number {
     return (BASE_TIMELINE_PX_PER_SECOND * clampTimelineZoom(zoomLevel)) / 1_000;
 }
 
+/** 屏幕坐标先还原为轨道像素，再按刻度比例换算时间；尾部留白不压缩时间轴。 */
+export function getTimelinePointerTime({ clientX, left, renderedWidth, trackWidth, pxPerMs, durationMs }: {
+    clientX: number;
+    left: number;
+    renderedWidth: number;
+    trackWidth: number;
+    pxPerMs: number;
+    durationMs: number;
+}): number {
+    const localX = (clientX - left) * trackWidth / Math.max(1, renderedWidth);
+    return Math.round(Math.min(Math.max(0, durationMs), Math.max(0, localX / Math.max(pxPerMs, 1e-6))));
+}
+
 export function getNextTimelineZoom(zoomLevel: number, direction: ZoomDirection): number {
     const nextZoom = direction === "in" ? zoomLevel * TIMELINE_ZOOM_STEP : zoomLevel / TIMELINE_ZOOM_STEP;
     return clampTimelineZoom(nextZoom);

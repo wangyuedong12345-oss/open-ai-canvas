@@ -4,7 +4,33 @@ import {
   getTimelinePxPerMs,
   getTimelineVisualEndMs,
   getTimelineTrackWidth,
+  getTimelinePointerTime,
 } from "../src/lib/timeline/timeline-view";
+
+describe("播放头与鼠标坐标一致", () => {
+  const base = { left: 184, renderedWidth: 960, trackWidth: 960, pxPerMs: 0.096, durationMs: 5_000 };
+
+  it("短视频尾部留白不压缩拖动比例", () => {
+    for (const x of [96, 192, 384, 480]) {
+      const time = getTimelinePointerTime({ ...base, clientX: base.left + x });
+      expect(time * base.pxPerMs).toBeCloseTo(x, 5);
+    }
+  });
+
+  it("横向滚动后的标尺左边界仍正确定位", () => {
+    expect(getTimelinePointerTime({ ...base, left: -100, clientX: 188 })).toBe(3_000);
+  });
+
+  it("时间轴缩放与容器视觉缩放使用相同像素比例", () => {
+    expect(getTimelinePointerTime({ ...base, pxPerMs: 0.192, clientX: 376 })).toBe(1_000);
+    expect(getTimelinePointerTime({ ...base, renderedWidth: 480, clientX: 280 })).toBe(2_000);
+  });
+
+  it("超出媒体范围只钳制在起点与终点", () => {
+    expect(getTimelinePointerTime({ ...base, clientX: 100 })).toBe(0);
+    expect(getTimelinePointerTime({ ...base, clientX: 1_100 })).toBe(5_000);
+  });
+});
 
 describe("timeline-view pxPerMs 独立性", () => {
   it("pxPerMs 仅由缩放级别决定，不随时长漂移", () => {

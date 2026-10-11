@@ -53,29 +53,39 @@ async function execute(method: string, data: any) {
         const document = current.scenes.document();
         return { document, scene: projection!.previsFromDocument(document, base!), revision: current.revision };
     }
+    if (method === "capture-composition") {
+        current.playing = false; current.busy = true;
+        const time = current.time;
+        try {
+            const document = current.scenes.document(), scene = projection!.previsFromDocument(document, base!);
+            const { outputSize } = await import("../vendor/director-desk/src/model");
+            const { captureDirectorComposition } = await import("./capture-composition");
+            const [width, height] = outputSize(current.project.aspect, 1280);
+            const beauty = await captureDirectorComposition(current.engine, { time, width, height, cameraId: current.preview, signal: new AbortController().signal });
+            let elapsed = 0;
+            const shot = scene.shots.find((shot) => time < (elapsed += shot.duration)) ?? scene.shots.at(-1);
+            if (!shot) throw new Error("当前场景没有可添加构图的镜头");
+            return { scene, document, revision: current.revision, beauty, shot, prompt: current.project.production?.promptText ?? current.project.production?.fixedPrompt ?? "" };
+        } finally { current.busy = false; }
+    }
     if (method === "export") {
         current.playing = false; current.busy = true; exportAborter = new AbortController();
-        const document = current.scenes.document(), scene = projection!.previsFromDocument(document, base!);
-        const { outputSize } = await import("../vendor/director-desk/src/model");
-        const { exportVideo } = await import("../vendor/director-desk/src/export");
-        const { DEFAULT_DEPTH_VIDEO } = await import("../vendor/director-desk/src/cinematography/depth-video");
-        const [width, height] = outputSize(current.project.aspect, 1280);
-        const shotIndex = data.shotId ? scene.shots.findIndex((shot) => shot.id === data.shotId) : -1;
-        if (data.shotId && shotIndex < 0) { current.busy = false; throw new Error("请求的预演镜头不存在"); }
-        const start = shotIndex < 0 ? 0 : scene.shots.slice(0, shotIndex).reduce((sum, shot) => sum + shot.duration, 0);
-        const end = Math.min(current.project.duration, start + (data.duration ?? (shotIndex < 0 ? current.project.duration : scene.shots[shotIndex].duration)));
         try {
-            current.engine.exporting = true;
-            await current.engine.prepareOutput(start, exportAborter.signal);
-            const canvas = current.engine.renderOutput(start, width, height, "program", null);
-            const beauty = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => b ? resolve(b) : reject(new Error("构图截图失败")), "image/png"));
-            current.engine.restorePreview(current.time);
+            const document = current.scenes.document(), scene = projection!.previsFromDocument(document, base!);
+            const { outputSize } = await import("../vendor/director-desk/src/model");
+            const { exportVideo } = await import("../vendor/director-desk/src/export");
+            const { DEFAULT_DEPTH_VIDEO } = await import("../vendor/director-desk/src/cinematography/depth-video");
+            const [width, height] = outputSize(current.project.aspect, 1280);
+            const shotIndex = data.shotId ? scene.shots.findIndex((shot) => shot.id === data.shotId) : -1;
+            if (data.shotId && shotIndex < 0) throw new Error("请求的预演镜头不存在");
+            const start = shotIndex < 0 ? 0 : scene.shots.slice(0, shotIndex).reduce((sum, shot) => sum + shot.duration, 0);
+            const end = Math.min(current.project.duration, start + (data.duration ?? (shotIndex < 0 ? current.project.duration : scene.shots[shotIndex].duration)));
             const video = await exportVideo(current.engine, {
                 start, end, fps: data.fps ?? current.project.fps, width, height, cameraId: "program", format: data.format === "webm" ? "webm" : "mp4",
                 monochrome: data.kind === "clay", ...(data.kind === "depth" ? { depth: current.project.depthVideo ?? DEFAULT_DEPTH_VIDEO } : {}),
             }, exportAborter.signal, (progress) => send({ type: "state", data: { progress, busy: true } }));
             if (!video) throw new Error("视频导出没有返回文件");
-            return { scene, document, revision: current.revision, beauty, clayVideo: video, clayVideoMimeType: video.type, videoKind: data.kind, prompt: current.project.production?.promptText ?? current.project.production?.fixedPrompt ?? "", shot: scene.shots[Math.max(0, shotIndex)] };
+            return { scene, document, revision: current.revision, clayVideo: video, clayVideoMimeType: video.type, videoKind: data.kind, prompt: current.project.production?.promptText ?? current.project.production?.fixedPrompt ?? "", shot: scene.shots[Math.max(0, shotIndex)] };
         } finally { exportAborter = undefined; current.busy = false; current.engine.restorePreview(current.time); }
     }
     throw new Error("不支持的导演台请求");

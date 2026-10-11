@@ -160,35 +160,55 @@ func (s *Service) ValidateAssetReplacementCanvasReferences(userID string, replac
 }
 
 func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
+	type timelineMedia struct {
+		Kind       string `json:"kind"`
+		AssetID    string `json:"assetId"`
+		StorageKey string `json:"storageKey"`
+		URL        string `json:"url"`
+		DataURL    string `json:"dataUrl"`
+		Content    string `json:"content"`
+	}
+	type mediaTimeline struct {
+		Clips []struct {
+			DirectMedia *timelineMedia `json:"directMedia"`
+		} `json:"clips"`
+	}
 	var payload struct {
 		Nodes []struct {
 			ID       string `json:"id"`
 			Type     string `json:"type"`
 			Metadata struct {
-				AssetID    string `json:"assetId"`
-				StorageKey string `json:"storageKey"`
-				Content    string `json:"content"`
+				AssetID    string        `json:"assetId"`
+				StorageKey string        `json:"storageKey"`
+				Content    string        `json:"content"`
+				Timeline   mediaTimeline `json:"timeline"`
 			} `json:"metadata"`
 		} `json:"nodes"`
-		Timeline struct {
-			Clips []struct {
-				DirectMedia *struct {
-					Kind       string `json:"kind"`
-					AssetID    string `json:"assetId"`
-					StorageKey string `json:"storageKey"`
-					URL        string `json:"url"`
-					DataURL    string `json:"dataUrl"`
-					Content    string `json:"content"`
-				} `json:"directMedia"`
-			} `json:"clips"`
-		} `json:"timeline"`
+		Timeline mediaTimeline `json:"timeline"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, err
 	}
 
 	references := make([]MediaAssetReference, 0)
+	appendTimeline := func(timeline mediaTimeline, path, nodeID string) {
+		for index, clip := range timeline.Clips {
+			media := clip.DirectMedia
+			if media == nil || !isCanvasMediaKind(media.Kind) {
+				continue
+			}
+			resourceID := firstCanvasResourceID(media.StorageKey, media.URL, media.DataURL, media.Content)
+			if resourceID == "" {
+				continue
+			}
+			references = append(references, MediaAssetReference{
+				AssetID: strings.TrimSpace(media.AssetID), ResourceID: resourceID, NodeID: nodeID,
+				Path: path + ".clips[" + strconv.Itoa(index) + "].directMedia", ReferenceType: "directMedia",
+			})
+		}
+	}
 	for _, node := range payload.Nodes {
+		appendTimeline(node.Metadata.Timeline, "nodes["+node.ID+"].metadata.timeline", node.ID)
 		if !isCanvasMediaKind(node.Type) {
 			continue
 		}
@@ -201,20 +221,7 @@ func MediaAssetReferences(raw json.RawMessage) ([]MediaAssetReference, error) {
 			})
 		}
 	}
-	for index, clip := range payload.Timeline.Clips {
-		media := clip.DirectMedia
-		if media == nil || !isCanvasMediaKind(media.Kind) {
-			continue
-		}
-		resourceID := firstCanvasResourceID(media.StorageKey, media.URL, media.DataURL, media.Content)
-		if resourceID == "" {
-			continue
-		}
-		references = append(references, MediaAssetReference{
-			AssetID: strings.TrimSpace(media.AssetID), ResourceID: resourceID,
-			Path: "timeline.clips[" + strconv.Itoa(index) + "].directMedia", ReferenceType: "directMedia",
-		})
-	}
+	appendTimeline(payload.Timeline, "timeline", "")
 	return references, nil
 }
 

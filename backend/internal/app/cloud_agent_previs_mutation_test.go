@@ -197,15 +197,15 @@ func TestCloudAgentPrevisSceneCreateBindsVideoWorkstation(t *testing.T) {
 	if workstation == nil {
 		t.Fatalf("bound workstation node missing: %#v", storedDoc["nodes"])
 	}
-	if stringValue(workstation["type"]) != "video" || numberValue(workstation["width"], 0) != cloudAgentPrevisWorkstationWidth || numberValue(workstation["height"], 0) != cloudAgentPrevisWorkstationHeight {
+	if stringValue(workstation["type"]) != "director-desk" || numberValue(workstation["width"], 0) != cloudAgentPrevisWorkstationWidth || numberValue(workstation["height"], 0) != cloudAgentPrevisWorkstationHeight {
 		t.Fatalf("unexpected workstation shape: %#v", workstation)
 	}
 	metadata, _ := workstation["metadata"].(map[string]any)
-	if stringValue(metadata["workflowKind"]) != "shot" || stringValue(metadata["previsSceneId"]) != "bound-scene" || stringValue(metadata["previsShotId"]) != shotID || stringValue(metadata["generationMode"]) != "video" {
+	if stringValue(metadata["workflowKind"]) != "shot" || stringValue(metadata["previsSceneId"]) != "bound-scene" || stringValue(metadata["previsShotId"]) != shotID || stringValue(metadata["generationMode"]) != "" {
 		t.Fatalf("workstation is not bound as a shot node: %#v", metadata)
 	}
-	if stringValue(metadata["videoEditOperation"]) != "text_to_video" || stringValue(metadata["status"]) != "idle" {
-		t.Fatalf("workstation generation metadata is incomplete: %#v", metadata)
+	if stringValue(metadata["videoEditOperation"]) != "" || stringValue(metadata["status"]) != "idle" {
+		t.Fatalf("director workstation has video generation metadata: %#v", metadata)
 	}
 }
 
@@ -351,6 +351,45 @@ func TestCloudAgentPrevisPatchRepairsLegacySceneWithoutWorkstation(t *testing.T)
 	metadata, _ := creationMaps(repairedDoc["nodes"])[0]["metadata"].(map[string]any)
 	if stringValue(metadata["previsSceneId"]) != "legacy-scene" || stringValue(metadata["previsShotId"]) == "" {
 		t.Fatalf("legacy repair did not bind scene and shot: %#v", metadata)
+	}
+}
+
+func TestCloudAgentPrevisDirectorDeskNodeIdentity(t *testing.T) {
+	scene := map[string]any{"id": "scene", "title": "场景名称", "shots": []map[string]any{{"id": "shot", "name": "镜头 1"}}}
+	ordinary := map[string]any{"id": "video", "type": "video", "title": "镜头 99", "metadata": map[string]any{"shotIndex": float64(99)}}
+	doc := map[string]any{"nodes": []map[string]any{ordinary}}
+	if _, _, _, err := cloudAgentPrevisEnsureWorkstationNode(doc, scene, "video", ""); err == nil {
+		t.Fatal("ordinary video was consumed as a director workstation")
+	}
+	id, _, created, err := cloudAgentPrevisEnsureWorkstationNode(doc, scene, "", "")
+	if err != nil || !created {
+		t.Fatalf("create director node: %v", err)
+	}
+	nodes := creationMaps(doc["nodes"])
+	if stringValue(nodes[1]["type"]) != "director-desk" || stringValue(nodes[1]["title"]) != "导演台 1" {
+		t.Fatalf("unexpected identity: %#v", nodes[1])
+	}
+	if next := cloudAgentPrevisNextWorkstationTitle(nodes); next != "导演台 2" {
+		t.Fatalf("unexpected next title: %s", next)
+	}
+	// Simulate the existing bound video node, then verify repair does not create a duplicate.
+	nodes[1]["type"], nodes[1]["title"] = "video", "镜头 2"
+	nodeMetadata := nodes[1]["metadata"].(map[string]any)
+	nodeMetadata["generationMode"] = "video"
+	nodeMetadata["videoEditOperation"] = "text_to_video"
+	boundID, _, recreated, err := cloudAgentPrevisEnsureWorkstationNode(doc, scene, "", "")
+	if err != nil || recreated || boundID != id || len(creationMaps(doc["nodes"])) != 2 {
+		t.Fatalf("repair lost existing node identity: %s, %v", boundID, err)
+	}
+	if stringValue(nodes[1]["title"]) != "导演台 2" || stringValue(nodes[1]["type"]) != "director-desk" || nodeMetadata["generationMode"] != nil || nodeMetadata["videoEditOperation"] != nil {
+		t.Fatalf("legacy video was not converted: %#v", nodes[1])
+	}
+	nodes[1]["type"], nodes[1]["title"] = "video", "123"
+	if _, _, _, err := cloudAgentPrevisEnsureWorkstationNode(doc, scene, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if stringValue(nodes[1]["title"]) != "123" {
+		t.Fatal("custom numeric title was overwritten")
 	}
 }
 

@@ -95,6 +95,14 @@ const BUILTIN_NODE_TRAITS = {
         generationMode: () => "audio",
         inputKind: "audio",
     },
+    [CanvasNodeType.DirectorDesk]: {
+        label: "导演台",
+        icon: <Clapperboard />,
+        minSize: MEDIA_NODE_MIN_SIZE,
+        showInCreateMenu: false,
+        showInputConnection: false,
+        showOutputConnection: false,
+    },
     [CanvasNodeType.Frame]: {
         label: "背板",
         // 背板在列表里就叫「背板」，不是「背板节点」——显式钉住，避免被 label 派生改写。

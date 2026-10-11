@@ -17,6 +17,7 @@ export const NODE_DEFAULT_SIZE = {
     // 配置节点同时承载模式、渠道、工作流和参数；预留稳定空间，避免控件和错误状态互相挤压。
     [CanvasNodeType.Config]: { width: 480, height: 390, title: "生成配置" },
     [CanvasNodeType.Video]: { width: 720, height: 405, title: "视频" },
+    [CanvasNodeType.DirectorDesk]: { width: 520, height: 340, title: "导演台" },
     [CanvasNodeType.Audio]: { width: 340, height: 120, title: "Audio" },
     [CanvasNodeType.Frame]: { width: 760, height: 520, title: "未命名背板" },
     [CanvasNodeType.Markdown]: { width: 420, height: 320, title: "Markdown" },
@@ -70,6 +71,10 @@ export const NODE_SPECS = {
     [CanvasNodeType.Audio]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Audio],
         metadata: { content: "", status: "idle" },
+    },
+    [CanvasNodeType.DirectorDesk]: {
+        ...NODE_DEFAULT_SIZE[CanvasNodeType.DirectorDesk],
+        metadata: { status: "idle", workflowKind: "shot" },
     },
     [CanvasNodeType.Frame]: {
         ...NODE_DEFAULT_SIZE[CanvasNodeType.Frame],

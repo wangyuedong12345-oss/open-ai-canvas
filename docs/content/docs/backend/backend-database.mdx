@@ -5,9 +5,17 @@ description: 影策后端核心持久化表与状态边界
 
 # 后端数据库
 
+## 节点独立剪辑
+
+无需新增表或列。画布视频、音频节点的多轨剪辑存于 `canvas_projects.payload_json` 的 `nodes[].metadata.timeline`，结构沿用 `TimelineProject`（`version`、`tracks`、`clips`、`durationMs`、`updatedAt`）。画布节点入口不再读写顶层 `timeline`，旧内容保留且不自动拆分。
+
+节点剪辑中的 `clips[].directMedia` 与顶层时间线使用相同素材绑定约束：受管媒体的 `assetId` 必须引用相同资源，资源必须归属当前用户且就绪。嵌套资源继续参与画布文档和历史的递归引用校验。
+
 ## DirectorDesk 工程
 
 本次无新表或列。原生工程保存在既有 `canvas_projects` 画布 JSON 的 `previsScenes[].directorDesk` 中：`version`、`upstreamVersion`、`document`、`resources`、`projection`。
+
+绑定节点在同一 JSON 的 `nodes[]` 中使用 `type: "director-desk"`，`metadata.previsSceneId` / `previsShotId` 关联工程及当前镜头。旧绑定视频节点加载时转换为专门类型，保留 ID 与引用；导出图片/视频节点的类型仍为 `image` / `video`。
 
 `document` 保留原生多戏段文档，内嵌素材字符串替换为空占位；`resources` 保存原始 JSON 路径、影策 `resource:<id>` 和字节数，读取时复原。上传对象复用资源记录、当前账号访问校验及画布 JSON 递归引用保护。`projection` 是用于差异合并的上次活动戏段摘要，不替代完整原生文档。
 

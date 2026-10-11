@@ -7,6 +7,7 @@ import { canvasAppearanceBaseTheme, canvasAppearanceForTheme, DEFAULT_CANVAS_BAC
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { removeCanvasDrawing } from "@/lib/canvas/canvas-drawing-storage";
 import { normalizeCanvasNodeTimestamps } from "@/lib/canvas/canvas-node-timestamps";
+import { normalizeDirectorDeskNodes } from "@/lib/canvas/previs/previs-node";
 import { hydrateAssistantImages, resetInterruptedGeneration } from "@/lib/canvas/canvas-project-generation";
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { createCanvasProjectWithRemoteSync, deleteCanvasProjectsWithRemoteSync, forceOverwriteRemoteCanvasSync, loadCanvasProjectForEditing, saveRemoteUserDataNow, subscribeAgentCanvasRefresh } from "@/services/user-data-sync";
@@ -121,7 +122,7 @@ export function useCanvasProjectLifecycle({
             const restoredAppearance = targetProject.appearance
                 ? normalizeCanvasAppearance(targetProject.appearance, fallbackTheme)
                 : canvasAppearanceForTheme(fallbackTheme);
-            const initialNodes = normalizeCanvasNodeTimestamps(resetInterruptedGeneration(targetProject.nodes), {
+            const initialNodes = normalizeCanvasNodeTimestamps(normalizeDirectorDeskNodes(resetInterruptedGeneration(targetProject.nodes)), {
                 createdAt: targetProject.createdAt,
                 updatedAt: targetProject.updatedAt,
             });

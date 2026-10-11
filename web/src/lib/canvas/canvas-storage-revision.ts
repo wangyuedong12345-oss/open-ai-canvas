@@ -1,6 +1,7 @@
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData } from "@/types/canvas";
 import { normalizeAssetCategory } from "@/lib/asset-category";
+import { normalizeDirectorDeskNodes } from "@/lib/canvas/previs/previs-node";
 import { sameCanvasContent } from "@/lib/canvas/canvas-content";
 
 export type CanvasStorageTombstones = {
@@ -92,8 +93,9 @@ export function parseCanvasStorageDocument(value: string | null, fallback: Canva
 
 function normalizeProjectAssetCategories(projects: CanvasProject[]) {
     return projects.map((project) => {
-        let changed = false;
-        const nodes = project.nodes.map((node) => {
+        const directorNodes = normalizeDirectorDeskNodes(project.nodes);
+        let changed = directorNodes !== project.nodes;
+        const nodes = directorNodes.map((node) => {
             const category = node.metadata?.assetCategory;
             if (!category) return node;
             const normalized = normalizeAssetCategory(category);

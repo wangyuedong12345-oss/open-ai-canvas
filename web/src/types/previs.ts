@@ -192,13 +192,11 @@ export type PrevisSceneOutput = {
     scene: PrevisScene;
     shot: PrevisShot;
     prompt: string;
-    beauty: Blob;
     depth?: Blob;
     normal?: Blob;
-    clayVideo?: Blob;
     clayVideoMimeType?: string;
     videoKind?: "color" | "clay" | "depth";
-};
+} & ({ beauty: Blob; clayVideo?: Blob } | { beauty?: never; clayVideo: Blob });
 
 export type DirectorDeskResource = { path: Array<string | number>; storageKey: string; bytes: number };
 export type DirectorDeskState = {

@@ -66,6 +66,16 @@ func TestRegistryAcceptsExtensibleIdentifiers(t *testing.T) {
 	}
 }
 
+func TestDirectorDeskIsNotVideoGenerationOrSource(t *testing.T) {
+	descriptor, ok := BuiltinRegistry().Resolve("director-desk")
+	if !ok || descriptor.Label != "导演台" || descriptor.GenerationMode != "" || descriptor.InputKind != "" || descriptor.Connection.CanSource || descriptor.Connection.CanReference {
+		t.Fatalf("director node inherited video capabilities: %#v", descriptor)
+	}
+	if !descriptor.AllowsInput("image") || !descriptor.AllowsInput("video") {
+		t.Fatal("director exports must retain their image/video reference links")
+	}
+}
+
 func TestRegistryHashIsStableAndTracksDeclarativeContract(t *testing.T) {
 	first := testDescriptor()
 	second := testDescriptor()

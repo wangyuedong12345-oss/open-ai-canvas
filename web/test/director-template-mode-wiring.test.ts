@@ -32,7 +32,8 @@ describe("新建场景必须显式选模板", () => {
     });
 
     test("新建走模板工厂，不再走带默认演员的 createPrevisScene", () => {
-        expect(hook).toContain("createPrevisSceneFromTemplate(templateId, `镜头 ${shotIndex}`)");
+        expect(hook).toContain("const title = `导演台 ${shotIndex}`;");
+        expect(hook).toContain("createPrevisSceneFromTemplate(templateId, title)");
         expect(hook).not.toContain("createPrevisScene(");
     });
 
@@ -199,7 +200,7 @@ describe("异步预演台输出使用最新权威状态", () => {
         expect(hook).toContain("const outputProject = useCanvasStore.getState().projects.find((item) => item.id === outputProjectId);");
         expect(hook).toContain("const sourceNode = nodesRef.current.find((item) => item.id === sourceNodeId);");
         expect(hook).toContain("const latestScene = outputProject?.previsScenes.find");
-        expect(hook).toContain("mergePrevisOutputPreview(latestScene");
+        expect(hook).toContain("applyPrevisMediaOutput({ ...latestContext");
         expect(hook).toContain("savePrevisScene(mergedScene);");
         expect(hook).not.toContain("savePrevisScene({ ...output.scene");
     });

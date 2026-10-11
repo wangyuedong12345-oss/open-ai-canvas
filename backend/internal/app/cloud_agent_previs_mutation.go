@@ -805,7 +805,7 @@ func cloudAgentPrevisEnsureWorkstationNode(doc map[string]any, scene map[string]
 	if err := validateCloudAgentID(sceneID, "导演场景 ID", 80); err != nil {
 		return "", "", false, err
 	}
-	shotID, shotTitle, shotIndex, err := cloudAgentPrevisActiveShot(scene)
+	shotID, _, shotIndex, err := cloudAgentPrevisActiveShot(scene)
 	if err != nil {
 		return "", "", false, err
 	}
@@ -819,25 +819,22 @@ func cloudAgentPrevisEnsureWorkstationNode(doc map[string]any, scene map[string]
 		nodeID = cloudAgentPrevisWorkstationNodeID(sceneID)
 	}
 	title := strings.TrimSpace(requestedTitle)
+	nodes := creationMaps(doc["nodes"])
 	if title == "" {
-		title = stringValue(scene["title"])
-	}
-	if title == "" {
-		title = shotTitle
+		title = cloudAgentPrevisNextWorkstationTitle(nodes)
 	}
 	if err := cloudAgentPrevisValidateText(title, "预演工作站标题", cloudAgentPrevisTextLimit, true); err != nil {
 		return "", "", false, err
 	}
 
-	nodes := creationMaps(doc["nodes"])
 	var bound map[string]any
 	for _, node := range nodes {
 		metadata, _ := node["metadata"].(map[string]any)
 		if stringValue(metadata["previsSceneId"]) != sceneID {
 			continue
 		}
-		if stringValue(node["type"]) != "video" {
-			return "", "", false, BadAuthRequest("预演场景已绑定非视频节点，无法修复工作站")
+		if stringValue(node["type"]) != "director-desk" && stringValue(node["type"]) != "video" {
+			return "", "", false, BadAuthRequest("预演场景已绑定其他类型节点，无法修复导演台")
 		}
 		if bound != nil && stringValue(bound["id"]) != stringValue(node["id"]) {
 			return "", "", false, BadAuthRequest("预演场景绑定了多个工作站节点，无法自动选择")
@@ -853,11 +850,14 @@ func cloudAgentPrevisEnsureWorkstationNode(doc map[string]any, scene map[string]
 		}
 	}
 	if requested != nil {
-		if stringValue(requested["type"]) != "video" {
-			return "", "", false, BadAuthRequest("预演工作站节点 ID 已被非视频节点占用")
+		if stringValue(requested["type"]) != "director-desk" && stringValue(requested["type"]) != "video" {
+			return "", "", false, BadAuthRequest("导演台节点 ID 已被其他类型节点占用")
 		}
 		metadata, _ := requested["metadata"].(map[string]any)
 		otherSceneID := stringValue(metadata["previsSceneId"])
+		if stringValue(requested["type"]) == "video" && otherSceneID != sceneID {
+			return "", "", false, BadAuthRequest("普通视频节点不能作为导演台，请创建专门节点")
+		}
 		if otherSceneID != "" && otherSceneID != sceneID {
 			return "", "", false, BadAuthRequest("预演工作站节点 ID 已绑定其他场景")
 		}
@@ -871,19 +871,17 @@ func cloudAgentPrevisEnsureWorkstationNode(doc map[string]any, scene map[string]
 	if bound == nil {
 		positionX, positionY := cloudAgentPrevisWorkstationPosition(nodes)
 		metadata := map[string]any{
-			"content":            "",
-			"status":             "idle",
-			"workflowKind":       "shot",
-			"workflowTitle":      shotTitle,
-			"shotIndex":          float64(shotIndex),
-			"generationMode":     "video",
-			"videoEditOperation": "text_to_video",
-			"composerContent":    "",
-			"previsSceneId":      sceneID,
-			"previsShotId":       shotID,
+			"content":         "",
+			"status":          "idle",
+			"workflowKind":    "shot",
+			"workflowTitle":   title,
+			"shotIndex":       float64(shotIndex),
+			"composerContent": "",
+			"previsSceneId":   sceneID,
+			"previsShotId":    shotID,
 		}
 		width, height := cloudAgentPrevisWorkstationWidth, cloudAgentPrevisWorkstationHeight
-		op := CreationCanvasOp{Type: "add_node", ID: nodeID, NodeType: "video", Title: title, X: &positionX, Y: &positionY, Width: &width, Height: &height, Metadata: metadata}
+		op := CreationCanvasOp{Type: "add_node", ID: nodeID, NodeType: "director-desk", Title: title, X: &positionX, Y: &positionY, Width: &width, Height: &height, Metadata: metadata}
 		nodes = append(nodes, creationAddedNode(op))
 		doc["nodes"] = nodes
 		return nodeID, shotID, true, nil
@@ -894,10 +892,9 @@ func cloudAgentPrevisEnsureWorkstationNode(doc map[string]any, scene map[string]
 		metadata = map[string]any{}
 	}
 	metadata["workflowKind"] = "shot"
-	metadata["workflowTitle"] = shotTitle
 	metadata["shotIndex"] = float64(shotIndex)
-	metadata["generationMode"] = "video"
-	metadata["videoEditOperation"] = "text_to_video"
+	delete(metadata, "generationMode")
+	delete(metadata, "videoEditOperation")
 	metadata["previsSceneId"] = sceneID
 	metadata["previsShotId"] = shotID
 	if _, exists := metadata["status"]; !exists {
@@ -910,8 +907,34 @@ func cloudAgentPrevisEnsureWorkstationNode(doc map[string]any, scene map[string]
 	if stringValue(bound["title"]) == "" || strings.TrimSpace(requestedTitle) != "" {
 		bound["title"] = title
 	}
+	if stringValue(bound["type"]) == "video" {
+		oldTitle := stringValue(bound["title"])
+		if index, err := strconv.Atoi(strings.TrimPrefix(oldTitle, "镜头 ")); strings.HasPrefix(oldTitle, "镜头 ") && err == nil && index > 0 {
+			bound["title"] = fmt.Sprintf("导演台 %d", index)
+		}
+	}
+	bound["type"] = "director-desk"
+	metadata["workflowTitle"] = stringValue(bound["title"])
 	doc["nodes"] = nodes
 	return stringValue(bound["id"]), shotID, created, nil
+}
+
+func cloudAgentPrevisNextWorkstationTitle(nodes []map[string]any) string {
+	count, maxIndex := 0, 0
+	for _, node := range nodes {
+		metadata, _ := node["metadata"].(map[string]any)
+		if stringValue(node["type"]) != "director-desk" && (stringValue(node["type"]) != "video" || stringValue(metadata["previsSceneId"]) == "") {
+			continue
+		}
+		count++
+		maxIndex = max(maxIndex, int(numberValue(metadata["shotIndex"], 0)))
+		for _, prefix := range []string{"导演台 ", "镜头 "} {
+			if index, err := strconv.Atoi(strings.TrimPrefix(stringValue(node["title"]), prefix)); strings.HasPrefix(stringValue(node["title"]), prefix) && err == nil {
+				maxIndex = max(maxIndex, index)
+			}
+		}
+	}
+	return fmt.Sprintf("导演台 %d", max(count, maxIndex)+1)
 }
 
 func prepareCloudAgentPrevisSceneCreate(repo *repository.Repository, userID, canvasID string, call cloudAgentCall) (*cloudAgentPrevisMutationPlan, error) {

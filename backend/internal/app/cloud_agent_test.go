@@ -620,10 +620,11 @@ func TestCloudAgentToolLoopPersistsApprovalAndAppliesCanvasWrite(t *testing.T) {
 func TestCloudAgentNodeTypesExposeExecutableAllowList(t *testing.T) {
 	result := cloudAgentNodeTypes()
 	nodes, ok := result["nodes"].([]map[string]any)
-	if !ok || len(nodes) != 10 {
+	if !ok || len(nodes) != 11 {
 		t.Fatalf("unexpected node registry: %#v", result)
 	}
 	var character map[string]any
+	var director map[string]any
 	for _, node := range nodes {
 		if node["type"] == "panorama" {
 			t.Fatal("UI-only node must not be exposed")
@@ -631,10 +632,16 @@ func TestCloudAgentNodeTypesExposeExecutableAllowList(t *testing.T) {
 		if node["type"] == "character" {
 			character = node
 		}
+		if node["type"] == "director-desk" {
+			director = node
+		}
 	}
 	// 角色卡必须被 Agent 发现，但只是 text 节点的变体：不能出现在 add_node 的 nodeType 枚举里。
 	if character == nil || character["creatable"] != false || character["canvasNodeType"] != "text" || character["workflowKind"] != "character" || character["canReference"] != true {
 		t.Fatalf("character capability is not discoverable as a non-creatable variant: %#v", character)
+	}
+	if director == nil || director["label"] != "导演台" || director["generationMode"] != nil || director["canSource"] != false || director["canReference"] != false {
+		t.Fatalf("director capability is missing or inherited video behavior: %#v", director)
 	}
 	for _, nodeType := range cloudAgentNodeTypeNames() {
 		if nodeType == "character" {

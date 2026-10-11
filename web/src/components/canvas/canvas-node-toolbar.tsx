@@ -9,6 +9,7 @@ import { canvasThemes } from "@/lib/canvas-theme";
 import { resolveNodeToolbarPlacement, resolveToolbarTools, type NodeToolbarGroup, type ToolContext, type ToolbarHandlers } from "@/lib/canvas/tool-registry";
 import { subscribeCanvasGraphicsViewportPreview } from "@/lib/canvas/canvas-live-viewport";
 import { canvasNodeAssetCategory } from "@/lib/canvas/canvas-node-asset";
+import { getNodeLabel } from "@/lib/canvas/node-registry";
 import type { ImageSplitParams } from "@/lib/canvas/canvas-image-data";
 import { formatBytes, getDataUrlByteSize } from "@/lib/image-utils";
 import { generationErrorMessage } from "@/lib/generation-error";
@@ -510,7 +511,7 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
     const [assetCategory, setAssetCategory] = useState<CanvasAssetCategory>("other");
     const imageBytes = node?.type === CanvasNodeType.Image && node.metadata?.content ? getDataUrlByteSize(node.metadata.content) : 0;
     const batchCount = node?.type === CanvasNodeType.Image ? node.metadata?.batchChildIds?.length || 0 : 0;
-    const nodeTypeLabel = node?.type === CanvasNodeType.Text ? "文本" : node?.type === CanvasNodeType.Script ? "分镜脚本" : node?.type === CanvasNodeType.Skill ? "技能" : node?.type === CanvasNodeType.Image ? "图片" : node?.type === CanvasNodeType.Video ? "视频" : node?.type === CanvasNodeType.Audio ? "音频" : node?.type === CanvasNodeType.Drawing ? "绘图" : node?.type === CanvasNodeType.Frame ? "背板" : "生成配置";
+    const nodeTypeLabel = node ? getNodeLabel(node.type) : "";
     useEffect(() => {
         setAssetTags(node?.metadata?.assetTags || []);
         setAssetTagInput("");
@@ -591,14 +592,14 @@ export function CanvasNodeInfoModal({ node, open, onClose, onMetadataChange, rea
                                 </section>
                             ) : null}
 
-                            {nodeGenerationPrompt(node) ? (
+                            {node.type !== CanvasNodeType.DirectorDesk && nodeGenerationPrompt(node) ? (
                                 <section className="canvas-node-inspector-section">
                                     <div className="canvas-node-inspector-section-heading"><span>提示词</span></div>
                                     <div className="canvas-node-inspector-copy canvas-node-inspector-prompt">{nodeGenerationPrompt(node)}</div>
                                 </section>
                             ) : null}
 
-                            {nodeGenerationRows(node, producedModelLabel(config, node.metadata?.producedModel)).length ? (
+                            {node.type !== CanvasNodeType.DirectorDesk && nodeGenerationRows(node, producedModelLabel(config, node.metadata?.producedModel)).length ? (
                                 <section className="canvas-node-inspector-section">
                                     <div className="canvas-node-inspector-section-heading"><span>生成信息</span></div>
                                     <div className="canvas-node-inspector-facts">

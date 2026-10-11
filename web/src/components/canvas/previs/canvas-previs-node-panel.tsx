@@ -18,7 +18,7 @@ export function CanvasPrevisNodePanel({ node, scene, readNodeContent, onOpen, pr
         resolvePrevisPreviewSource({ scene, shot, previewNodeId: node.metadata?.previsPreviewNodeId, readNodeContent }),
         failedUrl,
     );
-    const title = node.metadata?.workflowTitle || node.title;
+    const title = node.title;
     const objectCount = scene?.objects.filter((item) => item.visible !== false).length || 0;
     const cameraCount = scene?.cameras.length || 0;
     const lightCount = scene?.lights.length || 0;

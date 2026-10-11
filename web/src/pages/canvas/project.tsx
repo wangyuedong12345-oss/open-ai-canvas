@@ -2358,7 +2358,7 @@ function CanvasViewportPage() {
                     />
                 );
             }
-            if (contentNode.metadata?.previsSceneId) {
+            if (contentNode.type === CanvasNodeType.DirectorDesk || contentNode.metadata?.previsSceneId) {
                 return (
                     <CanvasPrevisNodePanel
                         node={contentNode}
@@ -3164,12 +3164,11 @@ function CanvasViewportPage() {
                                 config={effectiveConfig}
                                 onClose={() => setSubtitleNodeId(null)}
                                 onSave={(nodeId, patch) => {
-                                    handleConfigNodeChange(nodeId, patch);
-                                    const currentTimeline = currentProject?.timeline;
-                                    if (currentTimeline) {
-                                        const next = syncNodeSubtitlesToTimeline(currentTimeline, nodeId, patch.subtitleEntries || []);
-                                        if (next !== currentTimeline) updateProject(projectId, { timeline: next });
-                                    }
+                                    const currentTimeline = nodesRef.current.find((item) => item.id === nodeId)?.metadata?.timeline;
+                                    handleConfigNodeChange(nodeId, {
+                                        ...patch,
+                                        ...(currentTimeline ? { timeline: syncNodeSubtitlesToTimeline(currentTimeline, nodeId, patch.subtitleEntries || []) } : {}),
+                                    });
                                 }}
                             />
                         ) : null}
@@ -3184,7 +3183,7 @@ function CanvasViewportPage() {
                                 open={Boolean(segmentNode && segmentDialogMode)}
                                 mode={segmentDialogMode}
                                 config={effectiveConfig}
-                                timeline={currentProject?.timeline || null}
+                                timeline={segmentNode.metadata?.timeline || null}
                                 onClose={closeSegmentDialog}
                                 onConfirm={(params) => void handleSegmentConfirm(segmentNode, params)}
                             />
@@ -3192,23 +3191,16 @@ function CanvasViewportPage() {
 
                         {timelineNode ? (
                             <CanvasTimelineDialog
+                                key={timelineNode.id}
                                 node={timelineNode}
                                 open={Boolean(timelineNode)}
                                 nodes={nodes}
-                                timeline={currentProject?.timeline || null}
                                 onClose={() => setTimelineNodeId(null)}
                                 onOpenSubtitleDialog={(subNodeId) => {
                                     setTimelineNodeId(null);
                                     setSubtitleNodeId(subNodeId);
                                 }}
-                                onSave={(next) => updateProject(projectId, { timeline: next })}
-                                onSaveSubtitles={(subNodeId, entries) =>
-                                    handleConfigNodeChange(subNodeId, {
-                                        subtitleEntries: entries,
-                                        ...(entries.length ? {} : { subtitleHighlights: [] }),
-                                        subtitleUpdatedAt: new Date().toISOString(),
-                                    })
-                                }
+                                onSave={(patch) => handleConfigNodeChange(timelineNode.id, patch)}
                                 onOpenAssetLibrary={openTimelineAssetLibrary}
                                 onOpenProjectAssets={() => openProjectAssets("all", undefined, "timeline")}
                                 onUploadLocalFiles={uploadTimelineMedia}

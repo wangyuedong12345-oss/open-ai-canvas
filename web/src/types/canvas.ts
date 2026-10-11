@@ -5,7 +5,7 @@ import type { PortraitTextureSettings } from "@/lib/canvas/canvas-portrait-textu
 import type { StyleExecutionPlan } from "@/lib/canvas/style-profile";
 import type { ArtCritiqueNodeState } from "@/lib/art-critique/contracts";
 import type { CameraControlOptions } from "@/lib/canvas/camera-prompt-library";
-import type { SrtEntry, SubtitleHighlight, SubtitleStyle } from "@/types/timeline";
+import type { SrtEntry, SubtitleHighlight, SubtitleStyle, TimelineProject } from "@/types/timeline";
 import type { GenerationSpec } from "@/lib/canvas/generation-contract.generated";
 import type { GenerationTask } from "@/services/api/task-center";
 
@@ -28,6 +28,7 @@ export enum CanvasNodeType {
     Skill = "skill",
     Config = "config",
     Video = "video",
+    DirectorDesk = "director-desk",
     Audio = "audio",
     Frame = "frame",
     Markdown = "markdown",
@@ -475,6 +476,8 @@ export type CanvasNodeMetadata = {
     previsNormalNodeId?: string;
     previsClayVideoNodeId?: string;
     subtitleEntries?: SrtEntry[];
+    /** 当前节点独立保存的多轨剪辑；其他素材仅在用户添加后入轨。 */
+    timeline?: TimelineProject;
     subtitleHighlights?: SubtitleHighlight[];
     subtitleStyle?: SubtitleStyle;
     subtitleUpdatedAt?: string;

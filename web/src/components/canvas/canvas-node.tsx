@@ -139,6 +139,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     const showChrome = effectiveRenderLOD === "full";
     const nodeState = isFocusRelated ? "focus" : isConnectionTarget ? "target" : isSelected ? "selected" : isRelated && !isBatchChild ? "related" : "idle";
     const showOutputConnection = getNodeDefinition(data.type)?.showOutputConnection !== false;
+    const showInputConnection = getNodeDefinition(data.type)?.showInputConnection !== false;
     const assetTags = data.metadata?.assetTags?.filter((tag) => tag.trim()) || [];
     const scriptMinHeight = data.type === CanvasNodeType.Script ? storyboardMinNodeHeight(data.metadata?.storyboardComposerHeight) : null;
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -254,7 +255,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                         onViewImage?.(data);
                         return;
                     }
-                    if (data.metadata?.previsSceneId) {
+                    if (data.type === CanvasNodeType.DirectorDesk || data.metadata?.previsSceneId) {
                         event.stopPropagation();
                         onOpenPrevis?.(data);
                         return;
@@ -396,7 +397,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                     </div>
                 ) : null}
                 {showChrome && (assetTags.length || showProducedModel || (showImageInfo && hasImageContent)) ? (
-                    <div className={`pointer-events-none absolute inset-x-3 z-[var(--node-z-overlay)] flex items-end justify-between gap-2 ${mediaActive && hasVideoContent ? "bottom-16" : "bottom-3"}`}>
+                    <div className="pointer-events-none absolute inset-x-3 bottom-3 z-[var(--node-z-overlay)] flex items-end justify-between gap-2">
                         <div className="flex min-w-0 items-end gap-1">
                             {assetTags.length ? <AssetTagBadges tags={assetTags} theme={theme} /> : null}
                             {showProducedModel ? <CanvasNodeProducedModel stored={producedModelStored!} /> : null}
@@ -413,7 +414,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 </> : null}
             </div>
 
-            {(showChrome || forceInputVisible) && !readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.BatchTable ? <ConnectionSideRail side="left" scale={scale} theme={theme} visible={hovered || forceInputVisible} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
+            {(showChrome || forceInputVisible) && !readOnly && showInputConnection && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.BatchTable ? <ConnectionSideRail side="left" scale={scale} theme={theme} visible={hovered || forceInputVisible} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "target", undefined, anchorRatio)} /> : null}
             {showChrome && !readOnly && data.type !== CanvasNodeType.Script && data.type !== CanvasNodeType.Config && showOutputConnection ? <ConnectionSideRail side="right" scale={scale} theme={theme} visible={hovered} onPointerDown={(event, anchorRatio) => onConnectStart(event, data.id, "source", undefined, anchorRatio)} /> : null}
 
         </div>
@@ -641,6 +642,7 @@ function nodeTypeIcon(node: CanvasNodeData) {
     const type = node.type;
     if (type === CanvasNodeType.Image) return ImageIcon;
     if (type === CanvasNodeType.Video) return Video;
+    if (type === CanvasNodeType.DirectorDesk) return Clapperboard;
     if (type === CanvasNodeType.Audio) return Music2;
     if (type === CanvasNodeType.Drawing) return Pencil;
     if (type === CanvasNodeType.Script) return Clapperboard;

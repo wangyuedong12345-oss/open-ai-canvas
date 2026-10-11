@@ -92,7 +92,7 @@ describe("large canvas media rendering", () => {
         expect(inactivePreviewSource).toContain("hydrated.persisted.then");
         expect(inactivePreviewSource).not.toContain("autoPlay");
         expect(inactivePreviewSource).toContain("<VideoPreviewPlayButton");
-        expect(canvasNodeContentSource).toContain("useVideoPlaybackUrl(node, mediaActive)");
+        expect(canvasNodeContentSource).toContain("useVideoPlaybackUrl(node, playbackRequested)");
         expect(canvasNodeContentSource).toContain("onMediaPlayRequest?.(node.id)");
         expect(canvasNodeContentSource).toMatch(/autoPlay\s+preload="metadata"/);
         expect(canvasNodeContentSource).toContain("resolveVideoMediaUrl(storageKey, fallback)");

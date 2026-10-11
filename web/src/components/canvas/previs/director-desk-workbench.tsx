@@ -180,20 +180,24 @@ export function DirectorDeskWorkbench(props: Props) {
             setLoaded(false); setDirty(false); setSession(crypto.randomUUID());
         } catch (failure) { setError(`未重新载入，草稿保留失败：${(failure as Error).message}`); }
     };
-    const output = async (request?: PrevisPreviewRequest) => {
-        setError(""); setHostTasks((count) => count + 1); setProgress(0);
+    const output = async (request?: PrevisPreviewRequest, composition = false) => {
+        setError(""); setHostTasks((count) => count + 1); setProgress(composition ? null : 0);
+        setStatus(composition ? "正在截取当前构图…" : "正在生成预演视频…");
         try {
-            const result = await bridgeRef.current!.request<Snapshot & PrevisSceneOutput>("export", { kind: request ? "clay" : kind, format, ...(request ? { shotId: request.shotId, duration: request.duration, fps: request.fps } : {}) }, 1_200_000);
+            const result = composition
+                ? await bridgeRef.current!.request<Snapshot & PrevisSceneOutput>("capture-composition")
+                : await bridgeRef.current!.request<Snapshot & PrevisSceneOutput>("export", { kind: request ? "clay" : kind, format, ...(request ? { shotId: request.shotId, duration: request.duration, fps: request.fps } : {}) }, 1_200_000);
+            if (composition ? !result.beauty || result.clayVideo : !result.clayVideo || result.beauty) throw new Error("导演台返回的产物类型不符合本次操作，请重试");
             setProgress(null);
             const saved = await persist(result);
             assertCurrent();
-            setStatus("正在上传预演视频到画布…");
+            setStatus(composition ? "正在上传构图到画布…" : "正在上传预演视频到画布…");
             await propsRef.current.onApply({ ...result, scene: saved });
             await propsRef.current.onFlush?.(); await saveRemoteUserDataNow({ projectId: propsRef.current.canvasId });
             const latest = useCanvasStore.getState().projects.find((p) => p.id === propsRef.current.canvasId)?.previsScenes.find((s) => s.id === saved.id);
             if (latest) baseline.current = JSON.stringify(latest);
-            setStatus("已保存到云端"); message.success(result.videoKind === "depth" ? "深度视频已添加到画布" : "预演视频已添加到画布");
-        } catch (failure) { setStatus("视频回流未完成"); setError((failure as Error).message); }
+            setStatus("已保存到云端"); message.success(composition ? "构图已添加到画布" : result.videoKind === "depth" ? "深度视频已添加到画布" : "预演视频已添加到画布");
+        } catch (failure) { setStatus(composition ? "构图回流未完成" : "视频回流未完成"); setError((failure as Error).message); }
         finally { setHostTasks((count) => count - 1); setProgress(null); }
     };
     exportRef.current = output;
@@ -204,6 +208,7 @@ export function DirectorDeskWorkbench(props: Props) {
             <Select aria-label="回流视频画面" value={kind} onChange={setKind} disabled={busy} options={[{ value: "color", label: "普通视频" }, { value: "clay", label: "白模视频" }, { value: "depth", label: "深度视频" }]} />
             <Select aria-label="回流视频格式" value={format} onChange={setFormat} disabled={busy} options={[{ value: "mp4", label: "MP4" }, { value: "webm", label: "WebM" }]} />
             <Button disabled={!loaded || busy} onClick={() => void save().catch((failure) => setError(failure.message))}>保存</Button>
+            <Button disabled={!loaded || busy} onClick={() => void output(undefined, true)}>添加构图到画布</Button>
             <Button type="primary" disabled={!loaded || busy} onClick={() => void output()}>添加视频到画布</Button>
             {progress !== null && <Button onClick={() => void bridgeRef.current?.request("cancel")}>取消导出</Button>}
             <Button onClick={() => void close()}>返回画布</Button>

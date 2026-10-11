@@ -14,6 +14,7 @@ import {
 } from "@/services/api/user-data";
 import { ApiError } from "@/services/api/request";
 import { canvasContentHash, sameCanvasContent } from "@/lib/canvas/canvas-content";
+import { collectCanvasTimelines } from "@/lib/canvas/canvas-timelines";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { preserveCanvasSyncDraft, readCanvasSyncDrafts } from "@/services/canvas-sync-drafts";
 import { appQueryClient } from "@/lib/query-client";
@@ -658,7 +659,7 @@ export async function deleteCanvasProjectsWithRemoteSync(ids: string[]) {
             for (const node of proj.nodes) {
                 if (node.metadata?.assetId) activeAssetIds.add(node.metadata.assetId);
             }
-            for (const clip of proj.timeline?.clips || []) {
+            for (const clip of collectCanvasTimelines(proj).flatMap((timeline) => timeline.clips)) {
                 if (clip.directMedia?.assetId) activeAssetIds.add(clip.directMedia.assetId);
             }
         }
