@@ -79,18 +79,18 @@ test("channel model fetch requires explicit selection before import", async () =
     ]);
     const component = compactSource(componentSource);
 
-    expect(apiSource).toContain("http.post<{ models: string[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)");
+    expect(apiSource).toContain('http.post<{ models: import("@/lib/channel-model-catalog").ChannelModelCatalogItem[] }>(`/admin/channels/${encodeURIComponent(channelId)}/models/fetch`)');
     expect(apiSource).toContain("http.post<{ models: string[]; added: number }>(`/admin/channels/${encodeURIComponent(channelId)}/models/import`, { models })");
     expect(component).toContain('title="选择要导入的模型"');
-    expect(component).toContain("默认已全选");
+    expect(component).toContain("默认勾选已存在的模型，新模型默认不勾选");
     expect(component).toContain("setFetchPreviewOpen(true)");
-    expect(component).toContain("setSelectedFetchModels(result.models)");
-    expect(component).toContain("已选择 {selectedFetchModels.length} / {fetchPreviewModels.length} 个模型");
-    expect(component).toContain("disabled={importing || allFetchModelsSelected}");
-    expect(component).toContain("onClick={() => setSelectedFetchModels(fetchPreviewModels)}");
-    expect(component).toContain("disabled={importing || selectedFetchModels.length === 0}");
-    expect(component).toContain("onClick={() => setSelectedFetchModels([])}");
-    expect(component).toContain("取消全选");
+    expect(component).toContain("setSelectedFetchModels(selectExistingImportModels(result.models.map((item) => item.id),");
+    expect(component).toContain("当前匹配 {visibleFetchIDs.length} 个，总共已选 {selectedFetchModels.length} 个");
+    expect(component).toContain("disabled={importing || !visibleFetchIDs.length || allFetchModelsSelected}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels((current) => replaceVisibleSelection(current, visibleFetchIDs, visibleFetchIDs))}");
+    expect(component).toContain("disabled={importing || !anyVisibleSelected}");
+    expect(component).toContain("onClick={() => setSelectedFetchModels((current) => replaceVisibleSelection(current, visibleFetchIDs, []))}");
+    expect(component).toContain("取消选择当前结果");
     expect(component).toContain("disabled={importing}");
     expect(component).toContain("importAdminChannelModels(channel.id, selectedFetchModels)");
     expect(component).toContain("disabled={!selectedFetchModels.length}");

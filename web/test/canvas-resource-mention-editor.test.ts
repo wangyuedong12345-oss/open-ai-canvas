@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { moduleGroupSource } from "./helpers/module-group-source";
 
 function source(path: string) {
-    return readFileSync(resolve(import.meta.dir, path), "utf8");
+    return readFileSync(resolve(import.meta.dir, path), "utf8").replaceAll("\r\n", "\n");
 }
 
 describe("canvas resource mention editor", () => {

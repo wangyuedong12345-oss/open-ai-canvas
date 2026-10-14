@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -493,6 +494,11 @@ func publishSettingsKey(path string, key []byte, link func(string, string) error
 		return err
 	}
 	defer dir.Close()
+	// Windows cannot flush a directory handle; both publication paths above
+	// have already synced the complete key file before exposing its name.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
 	return dir.Sync()
 }
 

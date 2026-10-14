@@ -20,6 +20,11 @@ func TestGmailMailboxRegistrationConcurrent(t *testing.T) {
 	if err := db.AutoMigrate(&model.User{}, &model.EmailVerificationCode{}); err != nil {
 		t.Fatal(err)
 	}
+	primaryDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = primaryDB.Close() })
 	now := time.Now()
 	for _, id := range []string{"one", "two"} {
 		if err := db.Create(&model.EmailVerificationCode{ID: id, Email: id + "@gmail.com", ExpiresAt: now.Add(time.Hour)}).Error; err != nil {

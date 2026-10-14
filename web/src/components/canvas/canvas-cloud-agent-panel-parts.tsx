@@ -26,18 +26,21 @@ import { AgentWelcome } from "./canvas-agent-welcome";
 import { useEffectiveConfig } from "@/stores/use-config-store";
 import { agentPermissionLabel, agentPermissionMenuItems, agentPermissionVisual } from "./canvas-cloud-agent-settings";
 import { ModelPicker } from "@/components/model-picker";
-import { agentImageApproval } from "@/lib/canvas/agent-media-approval";
+import { agentImageApproval, agentVideoApproval } from "@/lib/canvas/agent-media-approval";
 import { agentApprovalPresentation } from "@/lib/canvas/agent-approval-presentation";
 import { CanvasAgentImageApprovalSettings } from "./canvas-agent-image-approval-settings";
+import { CanvasAgentVideoApprovalSettings } from "./canvas-agent-video-approval-settings";
 import { markdownPlainText } from "@/lib/markdown-plain-text";
 import type { ApprovalState } from "./canvas-cloud-agent-events";
 
 // hidden 为 true 时入口保持挂载但不显示：Live2D 模型加载开销大，面板开合不能卸载它，
-// 否则每次重新挂载都要重新下载模型并重建渲染上下文，期间只能显示默认形象。
+// 否则每次重新挂载都要重新下载模型并重建渲染上下文。
 export function AgentLauncher({ theme, statusColor, approvalPending, reducedMotion, hidden = false, onOpen }: { theme: CanvasTheme; statusColor: string; approvalPending: boolean; reducedMotion: boolean; hidden?: boolean; onOpen: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
+    const appearanceResolved = useAppearanceStore((state) => state.resolved);
     const modelURL = agentLive2DModelURL(appearance);
-    const live = appearance.avatarType === "live2d" && Boolean(modelURL);
+    const live = appearanceResolved && appearance.avatarType === "live2d" && Boolean(modelURL);
+    const [live2DError, setLive2DError] = useState("");
     const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
     useEffect(() => {
         const resize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
@@ -51,7 +54,7 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
         <motion.button
             type="button"
             aria-label={`打开${appearance.agentName}`}
-            title={`${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
+            title={live && live2DError ? live2DError : `${approvalPending ? "Agent 等待你的审批" : "打开 Agent 助手"} · 拖动可调整位置，聚焦后可用方向键移动`}
             className={cn("canvas-agent-launcher fixed z-[calc(var(--z-toast)+1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current/35", dragging && "is-dragging", live && "canvas-agent-launcher-live2d")}
             style={{ ...position, width, height, color: theme.node.text, "--canvas-agent-launcher-shadow": theme.spatial.shadow, ...(hidden ? { display: "none" } : null) } as CSSProperties}
             aria-hidden={hidden || undefined}
@@ -63,10 +66,16 @@ export function AgentLauncher({ theme, statusColor, approvalPending, reducedMoti
             transition={{ duration: reducedMotion ? 0 : 0.18 }}
         >
             {live ? (
-                <Live2DAvatar key={modelURL} url={modelURL} fallbackURL={builtinLive2DModelURL(builtinLive2DModel(appearance))} width={width} height={height} reducedMotion={reducedMotion} fallback={<StudyCharacter size={60} />} />
-            ) : (
+                <Live2DAvatar key={modelURL} url={modelURL} fallbackURL={builtinLive2DModelURL(builtinLive2DModel(appearance))} width={width} height={height} reducedMotion={reducedMotion} fallback={<StudyCharacter size={60} />} onReady={() => setLive2DError("")} onError={setLive2DError} />
+            ) : appearanceResolved ? (
                 <StudyCharacter size={60} />
+            ) : (
+                <span role="status" aria-busy="true">
+                    <LoaderCircle className={reducedMotion ? "size-6" : "size-6 motion-safe:animate-spin"} aria-hidden="true" />
+                    <span className="sr-only">正在加载助手形象</span>
+                </span>
             )}
+            {live && live2DError ? <span className="sr-only" role="status">{live2DError}</span> : null}
             {live ? (
                 <span className="canvas-agent-launcher-label" style={{ "--canvas-agent-status-color": statusColor } as CSSProperties}>
                     <span aria-hidden="true" className={cn("canvas-agent-launcher-status", approvalPending && "is-pending")} style={{ "--canvas-agent-status-color": statusColor } as CSSProperties} />
@@ -549,6 +558,7 @@ export function ApprovalCard({
     const [showReason, setShowReason] = useState(Boolean(approval.reason));
     const [mediaSettings, setMediaSettings] = useState<AgentMediaSettings>();
     const imageApproval = agentImageApproval(approval.detail);
+    const videoApproval = agentVideoApproval(approval.detail);
     const action = agentApprovalPresentation(approval.detail);
     return (
         <section className="canvas-agent-approval-card" aria-label={action.title}>
@@ -567,7 +577,7 @@ export function ApprovalCard({
                     {action.items.map((item, index) => (
                         <ApprovalPreviewItemView
                             key={`${item.operation}-${item.nodeId || item.nodeTitle || index}-${index}`}
-                            item={imageApproval ? { ...item, details: item.details?.filter((detail) => !/^(模型|画幅|质量)[：:]/.test(detail)) } : item}
+                            item={imageApproval || videoApproval ? { ...item, details: item.details?.filter((detail) => !/^(模型|画幅|质量|时长|音频)[：:]/.test(detail)) } : item}
                             theme={theme}
                             onFocusNode={onFocusNode}
                         />
@@ -578,7 +588,11 @@ export function ApprovalCard({
                     无法确认具体目标，继续前请重新读取画布。
                 </div>
             )}
-            {imageApproval ? <CanvasAgentImageApprovalSettings initial={imageApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} /> : null}
+            {imageApproval ? (
+                <CanvasAgentImageApprovalSettings initial={imageApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} />
+            ) : videoApproval ? (
+                <CanvasAgentVideoApprovalSettings initial={videoApproval} value={mediaSettings} onChange={setMediaSettings} theme={theme} disabled={submitting} />
+            ) : null}
             <button type="button" className="canvas-agent-approval-reason-toggle" aria-expanded={showReason} onClick={() => setShowReason((value) => !value)} disabled={submitting}>
                 {showReason ? "收起拒绝理由" : "填写拒绝理由（可选）"}
             </button>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { App, Button, Checkbox, Empty, Input, Modal, Popconfirm, Space, Tabs } from "antd";
+import { App, Button, Checkbox, Input, Modal, Popconfirm, Space, Tabs, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Copy, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
 import { PaginationBar } from "@/pages/admin/components/admin-ui";
 import { ModelIcon } from "@/components/model-picker";
@@ -16,6 +16,8 @@ import type { ChannelModelCatalogItem } from "@/lib/channel-model-catalog";
 import { filterImportModels, importCategories, replaceVisibleSelection, type ImportCategory } from "./model-import-filter";
 import { ChannelModelCostSummary } from "./channel-model-cost-summary";
 import { ChannelModelRepriceDialog } from "./channel-model-reprice-dialog";
+import { normalizeFetchModelKey, selectExistingImportModels } from "./channel-model-import-selection";
+import { duplicateChannelModelValues, type ChannelModelFormValues } from "./channel-model-editor-form";
 import { Select } from "@/components/ui/base/select";
 
 export function ChannelModelManager({ channel, onChanged }: { channel: ModelChannel; onChanged: () => void | Promise<void> }) {
@@ -25,6 +27,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
     const [deletingSelected, setDeletingSelected] = useState(false);
     const [repriceItems, setRepriceItems] = useState<ChannelModel[]>([]);
     const [editing, setEditing] = useState<ChannelModel | null>(null);
+    const [copyDraft, setCopyDraft] = useState<ChannelModelFormValues | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState("");
     const [fetching, setFetching] = useState(false);
@@ -75,6 +78,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
         void reload();
         void loadProtocols();
         setEditing(null);
+        setCopyDraft(null);
         setEditorOpen(false);
         setSelectedModelIds([]);
         setRepriceItems([]);
@@ -94,7 +98,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                 return;
             }
             setFetchPreviewModels(result.models);
-            setSelectedFetchModels([]);
+            setSelectedFetchModels(selectExistingImportModels(result.models.map((item) => item.id), items.flatMap((item) => [item.modelKey, item.providerModelKey].filter(Boolean))));
             setFetchKeyword("");
             setFetchCategory("all");
             setFetchPreviewOpen(true);
@@ -142,10 +146,17 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
 
     const startCreate = () => {
         setEditing(null);
+        setCopyDraft(null);
         setEditorOpen(true);
     };
     const startEdit = (item: ChannelModel) => {
         setEditing(item);
+        setCopyDraft(null);
+        setEditorOpen(true);
+    };
+    const startCopy = (item: ChannelModel) => {
+        setEditing(null);
+        setCopyDraft(duplicateChannelModelValues(item, availableProtocols));
         setEditorOpen(true);
     };
 
@@ -226,13 +237,16 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => <AdminStatusBadge label={enabled ? "启用" : "停用"} tone={enabled ? "success" : "neutral"} /> },
         {
             title: "操作",
-            width: 120,
+            width: 130,
             fixed: "right",
             render: (_, item) => (
-                <Space>
+                <Space size={4}>
                     <Button size="small" icon={<Pencil className="size-3.5" />} disabled={deletingSelected} onClick={() => startEdit(item)}>
                         编辑
                     </Button>
+                    <Tooltip title="复制模型">
+                        <Button size="small" aria-label={`复制模型 ${item.displayName || item.modelKey}`} disabled={deletingSelected} icon={<Copy className="size-3.5" />} onClick={() => startCopy(item)} />
+                    </Tooltip>
                     <Popconfirm title="删除模型" description="已被前台供应线路或进行中任务使用的模型不能删除；删除后模型不再显示，且不能在页面恢复。" okText="删除" cancelText="取消" onConfirm={() => void remove(item)}>
                         <Button size="small" danger disabled={deletingSelected} title="删除模型" aria-label="删除模型" icon={<Trash2 className="size-3.5" />} />
                     </Popconfirm>
@@ -463,7 +477,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                 ]}
             >
                 <div className="space-y-3">
-                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型</p>
+                    <p className="m-0 text-sm text-foreground/65">上游共返回 {fetchPreviewModels.length} 个模型。默认勾选已存在的模型，新模型默认不勾选；已存在的模型不会重复导入。</p>
                     <Input allowClear prefix={<Search className="size-4 text-foreground/40" />} placeholder="搜索模型名称或 ID" aria-label="搜索待导入模型" value={fetchKeyword} disabled={importing} onChange={(event) => setFetchKeyword(event.target.value)} />
                     <Tabs activeKey={fetchCategory} onChange={(key) => setFetchCategory(key as ImportCategory)} items={importCategories.map((key) => ({
                         key,
@@ -490,7 +504,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                             options={fetchModelOptions}
                             disabled={importing}
                             onChange={(values) => setSelectedFetchModels((current) => replaceVisibleSelection(current, visibleFetchIDs, (values as string[]).filter((id) => visibleFetchIDs.includes(id))))}
-                        /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的模型" />}
+                        /> : <p className="m-0 py-6 text-center text-sm text-foreground/55">没有匹配的模型</p>}
                     </div>
                     <div className="text-xs text-foreground/50">
                         {!selectedFetchModels.length ? "尚未选择模型" : selectedNewFetchModels.length > 0 ? `将导入 ${selectedNewFetchModels.length} 个新模型` : "当前勾选的模型均已存在"}
@@ -502,11 +516,16 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                 <ChannelModelEditor
                     channel={channel}
                     editing={editing}
+                    draftValues={copyDraft ?? undefined}
                     protocols={availableProtocols}
                     protocolLoading={protocolLoading}
                     protocolError={protocolError}
                     onRetryProtocols={() => void loadProtocols()}
-                    onClose={() => setEditorOpen(false)}
+                    onClose={() => {
+                        setEditorOpen(false);
+                        setCopyDraft(null);
+                        setEditing(null);
+                    }}
                     onSaved={async () => {
                         await reload();
                         await onChanged();
@@ -519,11 +538,4 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
 
 function capabilityLabel(value: ChannelModel["capability"]) {
     return { text: "文本", image: "图片", video: "视频", audio: "音频", "": "待配置" }[value];
-}
-
-function normalizeFetchModelKey(value: string) {
-    return value
-        .trim()
-        .replace(/^models\//, "")
-        .toLowerCase();
 }

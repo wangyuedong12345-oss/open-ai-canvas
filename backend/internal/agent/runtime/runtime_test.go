@@ -83,6 +83,29 @@ process.exitCode = 1;
 }
 
 // 子进程只能拿到白名单环境变量，拿不到数据库连接等密钥。
+func TestRunPreservesTemporaryDirectory(t *testing.T) {
+	directory := t.TempDir()
+	for _, name := range []string{"TEMP", "TMP", "TMPDIR"} {
+		t.Setenv(name, directory)
+	}
+	fakeRuntime(t, `
+import { mkdtemp, rmdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+const temporary = await mkdtemp(join(tmpdir(), "agent-runtime-"));
+if (resolve(dirname(temporary)) !== resolve(process.env.TEMP)) {
+  process.stdout.write(JSON.stringify({ event: "runtime_error", message: "wrong temporary directory" }) + "\n");
+  process.exitCode = 1;
+}
+await rmdir(temporary);
+`)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := Run(ctx, ProcessRequest{Model: map[string]any{"id": "m"}}, noopBridge()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRunDoesNotLeakBackendEnvironment(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://secret")
 	fakeRuntime(t, `

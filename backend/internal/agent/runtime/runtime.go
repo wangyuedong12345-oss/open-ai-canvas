@@ -94,6 +94,13 @@ func Run(ctx context.Context, request ProcessRequest, bridge Bridge) error {
 		"NODE_ENV=production",
 		"PI_OFFLINE=1",
 	}
+	// Keep the configured scratch directory without forwarding backend secrets.
+	// Node otherwise falls back to the system directory on Windows.
+	for _, name := range []string{"TEMP", "TMP", "TMPDIR", "SYSTEMROOT"} {
+		if value := os.Getenv(name); value != "" {
+			cmd.Env = append(cmd.Env, name+"="+value)
+		}
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("open Agent runtime output: %w", err)

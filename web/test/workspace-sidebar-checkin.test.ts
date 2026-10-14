@@ -20,7 +20,7 @@ describe("sidebar checkin offer", () => {
 });
 
 describe("workspace sidebar checkin card", () => {
-    test("sits above account storage and uses the claim card colors without a light-blue stage", () => {
+    test("follows account storage and uses the claim card colors without a light-blue stage", () => {
         const sidebar = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-nav.tsx"), "utf8");
         const card = readFileSync(resolve(import.meta.dir, "../src/components/layout/workspace-sidebar-checkin.tsx"), "utf8");
         const css = readFileSync(resolve(import.meta.dir, "../src/styles/globals.css"), "utf8");
@@ -31,7 +31,8 @@ describe("workspace sidebar checkin card", () => {
         const block = css.slice(start, end);
 
         expect(checkinIndex).toBeGreaterThan(-1);
-        expect(storageIndex).toBeGreaterThan(checkinIndex);
+        expect(storageIndex).toBeGreaterThan(-1);
+        expect(checkinIndex).toBeGreaterThan(storageIndex);
         expect(card).toContain("立即领取");
         expect(card).toContain("今日可领");
         expect(card).toContain("checkinCredits()");

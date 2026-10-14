@@ -47,7 +47,7 @@ describe("导演台专门节点", () => {
         expect(getNodeDefinition(director.type)).toMatchObject({ showInputConnection: false, showOutputConnection: false });
     });
 
-    test("导演台菜单只保留节点管理和移除，普通视频仍有上传与生成设置", () => {
+    test("导演台菜单只保留节点管理和移除，普通视频保留上传并隐藏生成设置", () => {
         const director = normalizeDirectorDeskNodes([video("镜头 1", { previsSceneId: "scene", status: "error" })])[0];
         const context = (node: CanvasNodeData) => ({ node, nodeMetadata: node.metadata, workspaceMode: "professional" } as ToolContext);
         const ctx = context(director);
@@ -56,6 +56,6 @@ describe("导演台专门节点", () => {
         expect(tools.every((tool) => resolveNodeToolbarPlacement(tool, ctx).group === "more")).toBe(true);
         const videoTools = nodeHoverToolbarTools.filter((tool) => !tool.applicable || tool.applicable(context(video("视频"))));
         expect(videoTools.some((tool) => tool.id === "uploadVideo")).toBe(true);
-        expect(videoTools.some((tool) => tool.id === "edit")).toBe(true);
+        expect(videoTools.some((tool) => tool.id === "edit")).toBe(false);
     });
 });

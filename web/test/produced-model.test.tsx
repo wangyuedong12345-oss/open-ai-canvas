@@ -153,7 +153,8 @@ describe("produced model badge", () => {
         expect(image).toContain("flux-dev");
         expect(image).toContain("1280 x 720");
         const video = renderMedia(CanvasNodeType.Video, true, true);
-        expect(video).toContain("bottom-16");
+        expect(video).toContain("inset-x-3 bottom-3");
+        expect(image).toContain("inset-x-3 bottom-3");
         expect(video).toContain("flux-dev");
         expect(video).not.toContain("1280 x 720");
         expect(renderMedia(CanvasNodeType.Audio, true)).toContain("flux-dev");

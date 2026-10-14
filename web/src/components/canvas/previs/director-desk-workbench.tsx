@@ -59,6 +59,8 @@ export function DirectorDeskWorkbench(props: Props) {
         setHostTasks((count) => count + 1);
         const task = (async () => {
             const initial = assertCurrent();
+            const canvasId = propsRef.current.canvasId;
+            if (!canvasId) throw new Error("画布已切换，请重新打开导演台");
             await drafts.setItem<Draft>(draftKey, { ...snapshot, baseUpdatedAt: initial.updatedAt, savedAt: Date.now() });
             setStatus("正在保存…");
             const stored = await writerRef.current(snapshot.document);
@@ -68,7 +70,7 @@ export function DirectorDeskWorkbench(props: Props) {
             propsRef.current.onChange(next); baseline.current = JSON.stringify(next);
             await propsRef.current.onFlush?.();
             setStatus("已保存到本地，正在同步云端…");
-            try { await saveRemoteUserDataNow({ projectId: propsRef.current.canvasId }); }
+            try { await saveRemoteUserDataNow(canvasId); }
             catch (failure) { setStatus("本地已保存 · 云端同步失败"); throw failure; }
             if (getActiveUserScope() !== scope) throw new Error("保存期间用户已切换");
             const acknowledged = await bridgeRef.current?.request<{ saved: boolean }>("saved", { revision: snapshot.revision, scene: next });
@@ -191,9 +193,11 @@ export function DirectorDeskWorkbench(props: Props) {
             setProgress(null);
             const saved = await persist(result);
             assertCurrent();
+            const canvasId = propsRef.current.canvasId;
+            if (!canvasId) throw new Error("画布已切换，请重新打开导演台");
             setStatus(composition ? "正在上传构图到画布…" : "正在上传预演视频到画布…");
             await propsRef.current.onApply({ ...result, scene: saved });
-            await propsRef.current.onFlush?.(); await saveRemoteUserDataNow({ projectId: propsRef.current.canvasId });
+            await propsRef.current.onFlush?.(); await saveRemoteUserDataNow(canvasId);
             const latest = useCanvasStore.getState().projects.find((p) => p.id === propsRef.current.canvasId)?.previsScenes.find((s) => s.id === saved.id);
             if (latest) baseline.current = JSON.stringify(latest);
             setStatus("已保存到云端"); message.success(composition ? "构图已添加到画布" : result.videoKind === "depth" ? "深度视频已添加到画布" : "预演视频已添加到画布");

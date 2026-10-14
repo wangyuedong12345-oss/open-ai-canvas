@@ -5,6 +5,12 @@ description: 在宿主机启动影策前后端开发服务
 
 # 本地开发
 
+## Windows 临时目录与密钥文件
+
+内嵌 Agent 沿用后端配置的 `TEMP`、`TMP`、`TMPDIR` 和系统目录变量；子进程仍只接收环境变量白名单，不传递数据库连接、供应商密钥或后端会话。临时目录须可写，运行时在其中新建独立的隔离目录。
+
+配置加密密钥在完整写入并同步文件内容后发布，已有密钥不会被覆盖。Windows 不支持对目录句柄执行 `Sync`，该平台不执行目录同步；其他平台继续同步发布目录。Windows 文件权限由数据目录及文件的 ACL 控制，不能用 Go 的 POSIX 权限位判断是否只有当前用户可读。
+
 ## SMTP 邮件故障日志
 
 注册、登录、绑定邮箱和密码找回的邮件投递失败统一输出 `ERROR` 级别的 `smtp email delivery failed` 后端日志。日志包含 `host`、`port`、`encryption`、脱敏 `recipient` 和 `error`，默认 `CANVAS_LOG_LEVEL=info` 即可看到，无需开启 debug。

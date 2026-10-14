@@ -17,6 +17,7 @@ describe("app icon bootstrap", () => {
 
     test("the appearance store remains the single writer of the favicon", () => {
         expect(appearanceStore).toContain('link[rel~="icon"]');
-        expect(appearanceStore).toContain("favicon.href = appearanceLogoURL(");
+        expect(appearanceStore).toContain('const darkLogo = appearanceLogoURL(appearance, "dark")');
+        expect(appearanceStore).toContain("favicon.href = darkLogo");
     });
 });

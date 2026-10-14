@@ -49,7 +49,7 @@ test("real collection toolbar supplies filled selects without changing their lab
 });
 
 test("collection select focus uses a thin keyboard ring, not a persistent pointer outline", () => {
-    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8");
+    const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8").replaceAll("\r\n", "\n");
     const toolbar = readFileSync(new URL("../src/components/layout/collection-toolbar.tsx", import.meta.url), "utf8");
     expect(css).toContain(".collection-toolbar .ant-select {\n        outline: none !important;");
     expect(css).toContain('[data-input-modality="keyboard"] .ant-select:not(.ant-select-disabled):focus-within');
@@ -72,7 +72,7 @@ test("workspace menu tokens are shadow-free and use theme-aware surfaces", () =>
 test("real grid consumes density rather than the old fixed column calculation", () => {
     const page = readFileSync(new URL("../src/pages/assets/index.tsx", import.meta.url), "utf8");
     const css = readFileSync(new URL("../src/styles/workspace-product.css", import.meta.url), "utf8");
-    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
+    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8").replaceAll("\r\n", "\n");
     expect(page).toContain('"--collection-grid-min-width": `${assetGridCardMinWidth[gridDensity]}px`');
     expect(css).toContain("minmax(min(100%, var(--collection-grid-min-width, 224px)), 1fr)");
     expect(globals).not.toContain("--assets-grid-columns");
@@ -81,7 +81,7 @@ test("real grid consumes density rather than the old fixed column calculation", 
 
 test("menu surfaces are explicitly scoped and old account inner overrides are removed", () => {
     const css = readFileSync(new URL("../src/styles/workspace-menus.css", import.meta.url), "utf8");
-    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8");
+    const globals = readFileSync(new URL("../src/styles/globals.css", import.meta.url), "utf8").replaceAll("\r\n", "\n");
     expect(css).toContain("@layer utilities");
     expect(css).toContain(".workspace-account-popover .ant-popover-container");
     expect(css).toContain("border: 0 !important");

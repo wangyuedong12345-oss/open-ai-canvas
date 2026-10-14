@@ -9,8 +9,16 @@ const scripts = fileURLToPath(new URL("../../.github/scripts/", import.meta.url)
 const temporaryDirectories = [];
 const sha = "a".repeat(40);
 const digest = "b".repeat(64);
+const windows = process.platform === "win32";
+const gitExecPath = windows ? spawnSync("git", ["--exec-path"], { encoding: "utf8" }).stdout.trim() : "";
+const bash = windows ? path.resolve(gitExecPath, "../../../bin/bash.exe") : "bash";
+const shellPath = (value) => windows ? value.replaceAll("\\", "/").replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`) : value;
 afterEach(() => {
-    for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
+    for (const directory of temporaryDirectories.splice(0)) {
+        const target = path.resolve(directory);
+        if (!target.startsWith(path.resolve(os.tmpdir()) + path.sep) || !path.basename(target).startsWith("canvas-ci-image-")) throw new Error("unexpected CI fixture directory");
+        rmSync(target, { recursive: true, force: true });
+    }
 });
 
 function fixture(overrides = {}) {
@@ -45,10 +53,16 @@ function fixture(overrides = {}) {
         MOCK_CALL: path.join(root, "docker-call"),
         ...overrides,
     };
+    if (windows) {
+        if (!existsSync(bash)) throw new Error("CI shell tests require Git Bash on Windows");
+        for (const name of ["GITHUB_OUTPUT", "DIGEST_DIR", "MOCK_CALL"]) env[name] = shellPath(env[name]);
+    }
     return {
-        run: (script, ...args) => spawnSync("bash", [path.join(scripts, script), ...args], { env, encoding: "utf8" }),
+        run: (script, ...args) => windows
+            ? spawnSync(bash, ["-c", 'export PATH="$CANVAS_CI_FIXTURE_BIN:/usr/bin:/bin:$PATH"; exec bash "$CANVAS_CI_SCRIPT" "$@"', "--", ...args], { env: { ...env, CANVAS_CI_FIXTURE_BIN: shellPath(bin), CANVAS_CI_SCRIPT: shellPath(path.join(scripts, script)) }, encoding: "utf8" })
+            : spawnSync(bash, [path.join(scripts, script), ...args], { env, encoding: "utf8" }),
         output: () => readFileSync(output, "utf8"),
-        call: () => (existsSync(env.MOCK_CALL) ? readFileSync(env.MOCK_CALL, "utf8") : ""),
+        call: () => (existsSync(path.join(root, "docker-call")) ? readFileSync(path.join(root, "docker-call"), "utf8") : ""),
     };
 }
 
