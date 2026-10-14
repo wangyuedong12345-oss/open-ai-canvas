@@ -36,8 +36,8 @@ export function imageParameterAccepts(field: ImageParameter, value: unknown): va
     return !field.values?.length || field.values.includes(value as ImageParameterValue);
 }
 
-export function imageParameterDefaults(parameters: ImageParameter[] = []) {
-    return Object.fromEntries(parameters.filter((p) => p.enabled !== false && p.default !== undefined).map((p) => [p.name, p.default!])) as Record<string, ImageParameterValue>;
+export function imageParameterDefaults(parameters: ImageParameter[] | null = []) {
+    return Object.fromEntries((parameters ?? []).filter((p) => p.enabled !== false && p.default !== undefined).map((p) => [p.name, p.default!])) as Record<string, ImageParameterValue>;
 }
 
 export function parseImageParameters(value: unknown): Record<string, ImageParameterValue> {
@@ -52,10 +52,10 @@ export function parseImageParameters(value: unknown): Record<string, ImageParame
     return Object.fromEntries(Object.entries(value).filter(([, v]) => typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v))));
 }
 
-export function normalizeImageParameters(parameters: ImageParameter[] = [], input: unknown = {}) {
+export function normalizeImageParameters(parameters: ImageParameter[] | null = [], input: unknown = {}) {
     const values = parseImageParameters(input);
     const result = imageParameterDefaults(parameters);
-    for (const field of parameters) {
+    for (const field of parameters ?? []) {
         if (field.enabled !== false && imageParameterAccepts(field, values[field.name])) result[field.name] = values[field.name];
     }
     return result;

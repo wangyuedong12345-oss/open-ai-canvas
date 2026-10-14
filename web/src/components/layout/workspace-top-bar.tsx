@@ -14,6 +14,8 @@ import { openWorkspaceWallet } from "@/lib/workspace-wallet";
 const PAGE_TITLES: Record<string, string> = {
     home: "创作",
     create: "创作",
+    "/toolbox/image": "图片",
+    "/toolbox/video": "视频",
     inspirations: "灵感",
     projects: "剧创",
     canvas: "画布",
@@ -34,7 +36,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
     const { availableMicrocredits } = useWalletBalance(user?.id, creditsEnabled);
     const { pathname } = useLocation();
     const slug = pathname.split("/").filter(Boolean)[0];
-    const pageTitle = pathname === "/" ? PAGE_TITLES.home : (slug && PAGE_TITLES[slug]) || brandName;
+    const pageTitle = PAGE_TITLES[pathname] || (pathname === "/" ? PAGE_TITLES.home : (slug && PAGE_TITLES[slug]) || brandName);
     const balance = availableMicrocredits === null ? "--" : (availableMicrocredits / 1_000_000).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 
     return (

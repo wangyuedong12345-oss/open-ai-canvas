@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ImageParameterFields, ImageParameterSchemaEditor, ImagePixelMappingEditor } from "../src/components/image-parameter-fields";
 import { ModelCapabilityEditor } from "../src/components/model-capability-editor";
 import { imagePresetForRatio } from "../src/lib/image-size-presets";
-import { imageParameterConstraints, imageParameterRequest, initializeImageRatioDefaults, normalizeImageParameters, projectImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter } from "../src/lib/image-parameters";
+import { imageParameterConstraints, imageParameterDefaults, imageParameterRequest, initializeImageRatioDefaults, normalizeImageParameters, projectImageParameters, updateImageParameterSchema, updateImageParameterSize, type ImageParameter } from "../src/lib/image-parameters";
 import { defaultImageCapabilityConfig } from "../src/lib/model-capabilities";
 import { projectLogicalCapability } from "../src/lib/user-session";
 import { capabilitySpecFromChannelModel, mergeCapabilitySpecs, normalizeCapabilitySpecForSources } from "../src/pages/admin/logical-models/model-routing-capabilities";
@@ -19,6 +19,16 @@ const parameters: ImageParameter[] = [
     { name: "creativeAmount", label: "创意程度", type: "integer", min: 0, max: 200, step: 1, default: 0 },
     { name: "rawMode", label: "原始模式", type: "boolean", default: false },
 ];
+
+test("image parameter initialization accepts a null optional schema", () => {
+    for (const schema of [null, undefined, []]) {
+        expect(imageParameterDefaults(schema)).toEqual({});
+        expect(normalizeImageParameters(schema, JSON.stringify({ rawMode: true, oldParameter: 999 }))).toEqual({});
+    }
+    expect(imageParameterDefaults(parameters)).toEqual({ imageResolution: "small", creativeAmount: 0, rawMode: false });
+    expect(normalizeImageParameters(parameters, { rawMode: true, creativeAmount: 0, oldParameter: 999 })).toEqual({ imageResolution: "small", creativeAmount: 0, rawMode: true });
+});
+
 function fixture(fields = parameters) {
     const image = projectImageParameters(defaultImageCapabilityConfig(), fields);
     const spec = capabilitySpecFromChannelModel({ capability: "image", capabilityConfig: { version: 1, image } } as ChannelModel)!;

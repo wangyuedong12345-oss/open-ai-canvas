@@ -50,8 +50,8 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
         {
             heading: "资源与工具",
             items: [
-                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: "图片生成", icon: ImageIcon, to: "/toolbox/image" }] : []),
-                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: "视频生成", icon: Video, to: "/toolbox/video" }] : []),
+                ...(features.imageWorkbenchEnabled ? [{ id: "toolbox-image", title: "图片", icon: ImageIcon, to: "/toolbox/image" }] : []),
+                ...(features.videoWorkbenchEnabled ? [{ id: "toolbox-video", title: "视频", icon: Video, to: "/toolbox/video" }] : []),
                 { ...toolItem("skills", "/skills"), title: "技能" },
                 ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : []),
             ],
