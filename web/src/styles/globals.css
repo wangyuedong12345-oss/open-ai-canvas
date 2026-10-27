@@ -14678,7 +14678,7 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-filter-item.is-active { background: var(--control-selected-bg); color: var(--control-selected-fg);}
 .assets-filter-item.is-active:hover { background: var(--control-selected-hover-bg); color: var(--control-selected-fg); }
 .assets-filter-item.is-active .assets-filter-count { background: color-mix(in srgb, var(--control-selected-fg) 18%, transparent); color: var(--control-selected-fg); }
-.assets-folder-row { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 26px; align-items: center; gap: 2px; }
+.assets-folder-row { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) repeat(2, var(--user-control-height-sm)); align-items: center; gap: 2px; }
 .assets-folder-row > .assets-filter-item { min-width: 0; width: 100%; }
 .assets-folder-action-spacer { width: 26px; height: 26px; }
 .assets-folder-add, .assets-folder-more { display: grid; width: 26px; height: 26px; flex: 0 0 auto; place-items: center; border: 0; border-radius: var(--r-md); background: transparent; color: color-mix(in srgb, var(--foreground) 42%, transparent); cursor: pointer; }
@@ -14716,22 +14716,22 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-cover-media { width: 100%; height: 100%; object-fit: contain; background: color-mix(in srgb, var(--foreground) 5%, transparent); }
 .assets-cover-fallback { display: grid; width: 100%; height: 100%; place-items: center; background: color-mix(in srgb, var(--foreground) 4%, transparent); color: color-mix(in srgb, var(--foreground) 42%, transparent); }
 .assets-cover-vignette { display: none; }
-.assets-cover-badges { position: absolute; top: 8px; left: 38px; right: 44px; z-index: 2; display: flex; align-items: center; gap: 4px; overflow: hidden; white-space: nowrap; pointer-events: none; }
+.assets-cover-badges { position: absolute; top: 6px; left: 26px; right: 28px; z-index: 2; display: flex; align-items: center; gap: 2px; white-space: nowrap; pointer-events: none; }
 .assets-cover-badge {
     display: inline-flex;
     flex-shrink: 0;
-    height: 20px;
+    height: 16px;
     align-items: center;
-    gap: 4px;
-    padding: 0 8px;
-    border-radius: 8px;
-    font-size: var(--fs-micro);
+    gap: 2px;
+    padding: 0 4px;
+    border-radius: var(--r-sm);
+    font-size: calc(var(--fs-label) - 1px);
     font-weight: 500;
     letter-spacing: .02em;
     line-height: 1;
     backdrop-filter: blur(6px);
 }
-.assets-cover-badge svg { width: 11px; height: 11px; }
+.assets-cover-badge svg { width: 10px; height: 10px; }
 .assets-cover-badge.is-kind { background: rgba(10, 10, 10, .62); color: #fff; }
 .assets-cover-badge.is-category { border: 1px solid rgba(255, 255, 255, .2); background: rgba(10, 10, 10, .5); color: rgba(255, 255, 255, .86); }
 .assets-cover-clock {
@@ -14765,16 +14765,16 @@ html:not(.dark) .creation-history-drawer-root {
 /* 选择入口固定在左上角，徽章预留其空间；选中描边由 is-selected 提供。 */
 .assets-select-check {
     position: absolute;
-    left: 8px;
-    top: 8px;
+    left: 6px;
+    top: 6px;
     z-index: 3;
-    width: 22px;
-    height: 22px;
+    width: 16px;
+    height: 16px;
     margin: 0;
     appearance: none;
     -webkit-appearance: none;
     border: 1.5px solid rgba(255, 255, 255, .72);
-    border-radius: 8px;
+    border-radius: var(--r-sm);
     background: rgba(10, 10, 10, .42);
     cursor: pointer;
     backdrop-filter: blur(6px);
@@ -14784,9 +14784,9 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-select-check::after {
     position: absolute;
     top: 2px;
-    left: 6px;
-    width: 6px;
-    height: 11px;
+    left: 4px;
+    width: 4px;
+    height: 8px;
     border: solid var(--control-check-fg);
     border-width: 0 2px 2px 0;
     content: "";
@@ -14801,12 +14801,12 @@ html:not(.dark) .creation-history-drawer-root {
 .assets-select-check:checked { opacity: 1; }
 .assets-cover-more {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 6px;
+    right: 6px;
     z-index: 3;
     display: grid;
-    width: 28px;
-    height: 28px;
+    width: 18px;
+    height: 18px;
     place-items: center;
     border: 1px solid rgba(255, 255, 255, .18);
     border-radius: var(--r-md);
@@ -14817,6 +14817,7 @@ html:not(.dark) .creation-history-drawer-root {
     opacity: 0;
     transition: opacity 180ms ease-out, background-color 180ms ease-out, transform 180ms var(--motion-ease-out);
 }
+.assets-cover-more svg { width: 12px; height: 12px; }
 .assets-cover-more:hover { background: rgba(10, 10, 10, .78); color: #fff;}
 .assets-cover-more:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .asset-library-card:hover .assets-cover-more, .asset-library-card:focus-within .assets-cover-more { opacity: 1; }

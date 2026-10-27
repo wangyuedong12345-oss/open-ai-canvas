@@ -18,7 +18,8 @@ describe("asset library filters", () => {
         expect(page).toContain("我的分类");
         expect(page).not.toContain("全部自定义分类");
         expect(css).toMatch(/\.assets-collection-layout\s*\{[^}]*grid-template-columns:\s*220px minmax\(0, 1fr\)/s);
-        expect(css).toContain("grid-template-columns: repeat(var(--assets-grid-columns, 6), minmax(0, 1fr));");
+        expect(css).toContain("minmax(min(100%, var(--collection-grid-min-width, 224px)), 1fr)");
+        expect(css).not.toContain("--assets-grid-columns");
     });
 });
 

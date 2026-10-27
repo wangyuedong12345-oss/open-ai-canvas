@@ -76,6 +76,7 @@ test("real grid consumes density rather than the old fixed column calculation", 
     expect(page).toContain('"--collection-grid-min-width": `${assetGridCardMinWidth[gridDensity]}px`');
     expect(css).toContain("minmax(min(100%, var(--collection-grid-min-width, 224px)), 1fr)");
     expect(globals).not.toContain("--assets-grid-columns");
+    expect(css).not.toContain("--assets-grid-columns");
     expect(css).not.toContain(".assets-library-page .assets-library-grid { grid-template-columns: repeat(2");
 });
 

@@ -458,9 +458,6 @@
     .app-user-workspace .assets-library-page .library-toolbar {
         margin-top: 24px;
     }
-    .app-product-workspace .assets-library-page .assets-library-grid {
-        grid-template-columns: repeat(var(--assets-grid-columns, 6), minmax(0, 1fr));
-    }
 }
 .app-product-workspace .project-library-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 312px), 1fr)); gap: 24px; }
 

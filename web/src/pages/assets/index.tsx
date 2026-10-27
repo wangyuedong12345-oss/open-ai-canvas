@@ -175,7 +175,14 @@ export default function AssetsPage() {
     const totalAssets = useRemotePage ? remoteTotal : filteredAssets.length;
     const kindCounts = useMemo(() => assetCountMap(kindOptions, useRemotePage ? assetPageQuery.data?.kindCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.kind), [activeAssets, assetPageQuery.data?.kindCounts, trashAssets, useRemotePage, viewMode]);
     const categoryCounts = useMemo(() => assetCountMap(categoryOptions, useRemotePage ? assetPageQuery.data?.categoryCounts : undefined, viewMode === "trash" ? trashAssets : activeAssets, (asset) => asset.category || "other"), [activeAssets, assetPageQuery.data?.categoryCounts, trashAssets, useRemotePage, viewMode]);
-    const folderCounts = assetPageQuery.data?.folderCounts || {};
+    const folderCounts = useRemotePage && viewMode === "library" && assetPageQuery.data?.folderCounts
+        ? assetPageQuery.data.folderCounts
+        : activeAssets.reduce<Record<string, number>>((counts, asset) => {
+            const folderId = asset.folderId || "";
+            counts[folderId] = (counts[folderId] ?? 0) + 1;
+            return counts;
+        }, {});
+    const allFoldersCount = Object.values(folderCounts).reduce((total, count) => total + count, 0);
 
     useEffect(() => {
         const maxPage = Math.max(1, Math.ceil(totalAssets / pageSize));
@@ -657,15 +664,15 @@ export default function AssetsPage() {
                                 </div>
                                 <div className="collection-folder-list">
                                     <button type="button" aria-pressed={folderFilter === "all"} className={`assets-filter-item ${folderFilter === "all" ? "is-active" : ""}`} onClick={() => { setFolderFilter("all"); setPage(1); }}>
-                                        <span className="assets-filter-item-label">全部</span><span className="assets-filter-count">{activeAssets.length}</span>
+                                        <span className="assets-filter-item-label">全部</span><span className="assets-filter-count">{allFoldersCount}</span>
                                     </button>
                                     <button type="button" aria-pressed={folderFilter === "uncategorized"} className={`assets-filter-item ${folderFilter === "uncategorized" ? "is-active" : ""}`} onClick={() => { setFolderFilter("uncategorized"); setPage(1); }}>
-                                        <span className="assets-filter-item-label">未分类</span><span className="assets-filter-count">{folderCounts[""] ?? activeAssets.filter((asset) => !asset.folderId).length}</span>
+                                        <span className="assets-filter-item-label">未分类</span><span className="assets-filter-count">{folderCounts[""] ?? 0}</span>
                                     </button>
                                     {folders.map((folder) => (
                                         <div key={folder.id} className="assets-folder-row">
                                             <button type="button" aria-pressed={folderFilter === folder.id} className={`assets-filter-item min-w-0 flex-1 ${folderFilter === folder.id ? "is-active" : ""}`} onClick={() => { setFolderFilter(folder.id); setPage(1); }}>
-                                                <span className="assets-filter-item-label min-w-0 truncate">{folder.name}</span><span className="assets-filter-count">{folderCounts[folder.id] ?? activeAssets.filter((asset) => asset.folderId === folder.id).length}</span>
+                                                <span className="assets-filter-item-label min-w-0 truncate">{folder.name}</span><span className="assets-filter-count">{folderCounts[folder.id] ?? 0}</span>
                                             </button>
                                             <button type="button" className="product-icon-button" aria-label={`重命名分类 ${folder.name}`} onClick={() => { setFolderName(folder.name); setFolderEditor(folder); }}><PencilLine /></button>
                                             <DeleteButton label={`删除分类 ${folder.name}`} description="分类删除后，其中的素材会移至未分类，素材文件会保留。" onConfirm={() => removeFolder(folder)} />
