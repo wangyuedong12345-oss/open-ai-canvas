@@ -66,29 +66,7 @@ function claimLive2DSlot(slot: Live2DSlot) {
     };
 }
 
-type Live2DAvatarProps = {
-    url: string;
-    fallbackURL?: string;
-    width: number;
-    height: number;
-    reducedMotion?: boolean;
-    fallback?: ReactNode;
-    renderPriority?: number;
-    onReady?: () => void;
-    onError?: (message: string) => void;
-};
-
-export function Live2DAvatar({ fallbackURL, ...props }: Live2DAvatarProps) {
-    const [failedURL, setFailedURL] = useState("");
-    const usingFallback = failedURL === props.url && Boolean(fallbackURL && fallbackURL !== props.url);
-    const url = usingFallback ? fallbackURL! : props.url;
-    return <Live2DModelAvatar {...props} key={url} url={url} onReady={usingFallback ? undefined : props.onReady} onError={(reason) => {
-        props.onError?.(reason);
-        if (!usingFallback) setFailedURL(props.url);
-    }} />;
-}
-
-function Live2DModelAvatar({
+export function Live2DAvatar({
     url,
     width,
     height,

@@ -4,13 +4,8 @@ import { ExternalLink, Upload } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 import { Live2DAvatar } from "@/components/canvas/live2d-avatar";
 import { FluidOrb } from "@/components/ui/fluid-orb";
-import { StudyCharacter } from "@/components/ui/study-character";
 import {
     AGENT_AVATAR_STATES,
-    BUILTIN_LIVE2D_MODELS,
-    builtinLive2DModel,
-    live2DSource,
-    type BuiltinLive2DModel,
     DEFAULT_AGENT_AVATAR_CLIP_STATES,
     agentAvatarClipForState,
     agentCopy,
@@ -20,7 +15,7 @@ import {
     type AgentAvatarState,
     type CanvasAppearance,
 } from "@/lib/canvas/agent-appearance";
-import { agentAvatarBundleFileURL, agentLive2DModelURL, uploadAgentAvatarBundle, uploadLive2D } from "@/services/api/appearance";
+import { agentAvatarBundleFileURL, live2DModelURL, uploadAgentAvatarBundle, uploadLive2D } from "@/services/api/appearance";
 import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
 
 export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading }: { value: CanvasAppearance; onChange: (value: CanvasAppearance) => void; disabled: boolean; onUploading: (value: boolean) => void }) {
@@ -36,9 +31,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
     const [bundleLoading, setBundleLoading] = useState(false);
     const [bundleError, setBundleError] = useState("");
     const [selectedAvatarState, setSelectedAvatarState] = useState<AgentAvatarState>("idle");
-    const url = agentLive2DModelURL(value, true);
-    const source = live2DSource(value);
-    const builtinModel = builtinLive2DModel(value);
+    const url = value.live2dResourceId ? live2DModelURL(value.live2dResourceId, value.live2dEntry, true) : "";
     const bundleID = value.avatarBundleResourceId;
     const bundleManifestURL = bundleID ? agentAvatarBundleFileURL(bundleID, "avatar.json", true) : "/doll/avatar.json";
     const previewClip = bundleManifest ? agentAvatarClipForState(value, selectedAvatarState, bundleManifest) : "";
@@ -142,7 +135,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                     disabled={disabled || uploading}
                     options={[
                         { label: "默认动态球", value: "orb" },
-                        { label: "Live2D", value: "live2d" },
+                        { label: "Live2D", value: "live2d", disabled: !url || readyURL !== url },
                         { label: "状态动画包", value: "bundle" },
                     ]}
                     onChange={(event) => {
@@ -150,14 +143,6 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                         change(type === "bundle" ? { avatarType: type, avatarClipStates: value.avatarClipStates || DEFAULT_AGENT_AVATAR_CLIP_STATES } : { avatarType: type });
                     }}
                 />
-                {value.avatarType === "live2d" ? <Select aria-label="选择 Live2D 形象" className="w-56 max-w-full" value={source === "custom" ? "custom" : builtinModel} disabled={disabled || uploading} options={[
-                    { label: "内置形象", options: BUILTIN_LIVE2D_MODELS.map((model) => ({ label: model, value: model })) },
-                    ...(value.live2dResourceId ? [{ label: "自定义形象", options: [{ label: "自定义模型（已导入）", value: "custom" }] }] : []),
-                ]} onChange={(model: BuiltinLive2DModel | "custom") => {
-                    setReadyURL("");
-                    setError("");
-                    change(model === "custom" ? { live2dSource: "custom" } : { live2dSource: "builtin", live2dBuiltinModel: model });
-                }} /> : null}
                 {value.avatarType === "live2d" ? (
                     <p className="text-sm text-foreground/60">上传有授权的 Cubism 3/4 运行时 ZIP：一个 model3.json、moc3、PNG 纹理及可选动作/表情 JSON。首期不支持音频、旧版模型和编辑工程。模型会发送到浏览器，无法保证防下载。</p>
                 ) : null}
@@ -295,7 +280,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             width={Math.round(value.avatarHeight * 0.75)}
                             height={value.avatarHeight}
                             reducedMotion={reducedMotion}
-                            fallback={<StudyCharacter size={60} />}
+                            fallback={<FluidOrb size={60} color="#7164f6" />}
                             // 预览期间由预览框独占 Live2D 渲染，悬浮入口临时显示默认球。
                             renderPriority={1}
                             onReady={() => {
@@ -318,7 +303,7 @@ export function CanvasAppearanceEditor({ value, onChange, disabled, onUploading 
                             <AgentAvatarVideo src={previewBundleURL} loop={!["completed", "failed"].includes(selectedAvatarState)} />
                         </div>
                     ) : (
-                        <StudyCharacter size={60} />
+                        <FluidOrb size={60} color="#7164f6" />
                     )}
                     <strong>{agentCopy(value.welcomeTitle, value.agentName)}</strong>
                     <p className="text-sm text-foreground/60">{agentCopy(value.welcomeDescription, value.agentName)}</p>

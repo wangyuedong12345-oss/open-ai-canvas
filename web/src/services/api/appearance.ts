@@ -1,6 +1,6 @@
 import { http } from "@/services/api/request";
 import type { SkinDefinition } from "@/lib/skin-themes";
-import { builtinLive2DModel, live2DSource, type BuiltinLive2DModel, type AgentAvatarBundleManifest, type CanvasAppearance } from "@/lib/canvas/agent-appearance";
+import type { AgentAvatarBundleManifest, CanvasAppearance } from "@/lib/canvas/agent-appearance";
 import { apiBaseURL } from "@/services/api/request";
 import type { UpdateAnnouncement } from "@/lib/update-announcement";
 
@@ -165,13 +165,4 @@ export function agentAvatarBundleFileURL(resourceId: string, file: string, previ
 
 export function live2DModelURL(resourceId: string, entry: string, preview = false) {
     return `${apiBaseURL.replace(/\/$/, "")}/${preview ? "admin/settings" : "public"}/appearance/live2d/${encodeURIComponent(resourceId)}/${entry.split("/").map(encodeURIComponent).join("/")}`;
-}
-
-export function builtinLive2DModelURL(model: BuiltinLive2DModel) {
-    return `${import.meta.env.BASE_URL || "/"}live2d/models/${model}/${model}.model3.json`;
-}
-
-export function agentLive2DModelURL(appearance: CanvasAppearance, preview = false) {
-    if (live2DSource(appearance) === "builtin") return builtinLive2DModelURL(builtinLive2DModel(appearance));
-    return appearance.live2dResourceId && appearance.live2dEntry ? live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry, preview) : "";
 }

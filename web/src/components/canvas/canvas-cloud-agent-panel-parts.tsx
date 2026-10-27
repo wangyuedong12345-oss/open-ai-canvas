@@ -12,9 +12,7 @@ import { useAgentLauncherPosition } from "./use-agent-launcher-position";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { Live2DAvatar } from "./live2d-avatar";
-import { agentAvatarBundleFileURL, agentLive2DModelURL, builtinLive2DModelURL } from "@/services/api/appearance";
-import { builtinLive2DModel } from "@/lib/canvas/agent-appearance";
-import { StudyCharacter } from "@/components/ui/study-character";
+import { agentAvatarBundleFileURL, live2DModelURL } from "@/services/api/appearance";
 import { AgentAvatarVideo } from "@/components/canvas/agent-avatar-video";
 import { FluidOrb } from "@/components/ui/fluid-orb";
 import { ArrowLeft, Check, CircleDot, Clock3, Download, History, LoaderCircle, Maximize2, MessageSquarePlus, Minus, RotateCcw, Settings2, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
@@ -61,8 +59,7 @@ export function AgentLauncher({
     const appearance = useAppearanceStore((state) => state.appearance.canvas) || DEFAULT_CANVAS_APPEARANCE;
     const appearanceResolved = useAppearanceStore((state) => state.resolved);
     const appearanceRevision = useAppearanceStore((state) => state.appearance.revision);
-    const liveURL = agentLive2DModelURL(appearance);
-    const live = appearance.avatarType === "live2d" && Boolean(liveURL);
+    const live = appearance.avatarType === "live2d" && Boolean(appearance.live2dResourceId && appearance.live2dEntry);
     const avatarState = agentAvatarStateForRunStatus(status);
     const bundleManifestURL = appearance.avatarBundleResourceId ? agentAvatarBundleFileURL(appearance.avatarBundleResourceId, "avatar.json", false, appearanceRevision) : "/doll/avatar.json";
     const [bundleManifestState, setBundleManifestState] = useState<{ url: string; manifest: AgentAvatarBundleManifest | null } | null>(null);
@@ -147,12 +144,11 @@ export function AgentLauncher({
                     <FluidOrb size={30} color="#7164f6" />
                 ) : live ? (
                     <Live2DAvatar
-                        url={liveURL}
-                        fallbackURL={builtinLive2DModelURL(builtinLive2DModel(appearance))}
+                        url={live2DModelURL(appearance.live2dResourceId, appearance.live2dEntry)}
                         width={width}
                         height={height}
                         reducedMotion={reducedMotion}
-                        fallback={<StudyCharacter size={60} />}
+                        fallback={<FluidOrb size={60} color="#7164f6" />}
                         onReady={() => setLive2DError("")}
                         onError={setLive2DError}
                     />
@@ -164,7 +160,7 @@ export function AgentLauncher({
                         <span className="sr-only">正在加载助手形象</span>
                     </span>
                 ) : (
-                    <StudyCharacter size={60} />
+                    <FluidOrb size={60} color="#7164f6" />
                 )}
                 {appearance.launcherLabel && !collapsed ? <span className="canvas-agent-launcher-label">{appearance.launcherLabel}</span> : null}
                 {live && live2DError ? (

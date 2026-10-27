@@ -16,8 +16,6 @@ type CanvasAppearance struct {
 	AvatarType             string            `json:"avatarType"`
 	Live2DResourceID       string            `json:"live2dResourceId"`
 	Live2DEntry            string            `json:"live2dEntry"`
-	Live2DSource           string            `json:"live2dSource,omitempty"`
-	Live2DBuiltinModel     string            `json:"live2dBuiltinModel,omitempty"`
 	AvatarBundleResourceID string            `json:"avatarBundleResourceId"`
 	AvatarClipStates       map[string]string `json:"avatarClipStates,omitempty"`
 	AvatarHeight           int               `json:"avatarHeight"`
@@ -69,24 +67,7 @@ func normalizeCanvasAppearance(value CanvasAppearance) (CanvasAppearance, error)
 	if value.AvatarHeight < 120 || value.AvatarHeight > 360 {
 		return value, BadAuthRequest("形象高度须在 120–360 之间")
 	}
-	if value.Live2DSource == "" {
-		value.Live2DSource = "builtin"
-		if value.Live2DResourceID != "" {
-			value.Live2DSource = "custom"
-		}
-	}
-	if value.Live2DSource != "builtin" && value.Live2DSource != "custom" {
-		return value, BadAuthRequest("请选择有效的 Live2D 模型来源")
-	}
-	if value.Live2DBuiltinModel == "" {
-		value.Live2DBuiltinModel = "nito"
-	}
-	switch value.Live2DBuiltinModel {
-	case "nito", "nico", "nietzsche", "ni-j", "nipsilon":
-	default:
-		return value, BadAuthRequest("请选择有效的内置 Live2D 形象")
-	}
-	if value.AvatarType == "live2d" && value.Live2DSource == "custom" && value.Live2DResourceID == "" {
+	if value.AvatarType == "live2d" && value.Live2DResourceID == "" {
 		return value, BadAuthRequest("请先导入 Live2D 模型")
 	}
 	value.AvatarBundleResourceID = strings.TrimSpace(value.AvatarBundleResourceID)
