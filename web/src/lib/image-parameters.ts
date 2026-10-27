@@ -36,8 +36,10 @@ export function imageParameterAccepts(field: ImageParameter, value: unknown): va
     return !field.values?.length || field.values.includes(value as ImageParameterValue);
 }
 
-export function imageParameterDefaults(parameters: ImageParameter[] | null = []) {
-    return Object.fromEntries((parameters ?? []).filter((p) => p.enabled !== false && p.default !== undefined).map((p) => [p.name, p.default!])) as Record<string, ImageParameterValue>;
+// 后端把插件未声明参数的能力切片序列化为 null（Go nil slice），默认参数语法
+// 只兜 undefined，读路径必须显式归一，避免 null.filter 渲染崩溃。
+export function imageParameterDefaults(parameters?: ImageParameter[] | null) {
+    return Object.fromEntries((parameters || []).filter((p) => p.enabled !== false && p.default !== undefined).map((p) => [p.name, p.default!])) as Record<string, ImageParameterValue>;
 }
 
 export function parseImageParameters(value: unknown): Record<string, ImageParameterValue> {
@@ -52,10 +54,11 @@ export function parseImageParameters(value: unknown): Record<string, ImageParame
     return Object.fromEntries(Object.entries(value).filter(([, v]) => typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v))));
 }
 
-export function normalizeImageParameters(parameters: ImageParameter[] | null = [], input: unknown = {}) {
+export function normalizeImageParameters(parameters?: ImageParameter[] | null, input: unknown = {}) {
+    const fields = parameters || [];
     const values = parseImageParameters(input);
-    const result = imageParameterDefaults(parameters);
-    for (const field of parameters ?? []) {
+    const result = imageParameterDefaults(fields);
+    for (const field of fields) {
         if (field.enabled !== false && imageParameterAccepts(field, values[field.name])) result[field.name] = values[field.name];
     }
     return result;
@@ -129,7 +132,7 @@ export function projectImageParameters(profile: ImageCapabilityConfig, parameter
                           (!active.has("imageResolution") || !active.get("imageResolution")?.values?.length || active.get("imageResolution")!.values!.includes(p.tier)),
                   ),
               }
-            : { parameter: "none", values: [], default: "auto", allowCustom: false },
+            : { ...profile.size, parameter: "none", values: [], default: "auto", allowCustom: false },
     };
 }
 
@@ -145,17 +148,30 @@ export function updateImageParameterSchema(profile: ImageCapabilityConfig, param
     const resolution = parameters.find((field) => field.name === "imageResolution");
     const size = profile.resolution.supported && resolution?.enabled === false ? { ...profile.size, defaultTier: profile.resolution.default } : profile.size;
     const next = projectImageParameters({ ...profile, size }, parameters);
-    const previous = profile.parameters?.find((field) => field.name === "imageResolution")?.values || [];
-    const added = next.resolution.supported ? next.resolution.values.filter((tier) => !previous.includes(tier)) : [];
-    return initializeImageRatioDefaults(next, definitions, added);
+    const sizeField = parameters.find((field) => field.name === "size");
+    const wasSizeEnabled = profile.parameters?.some((field) => field.name === "size" && field.enabled !== false);
+    const added = next.resolution.supported ? next.resolution.values.filter((tier) => !wasSizeEnabled || !profile.resolution.supported || !profile.resolution.values.includes(tier)) : [];
+    // 在投影裁剪旧档位前提取已选比例；像素支持值通过已有精确预设还原比例。
+    const values = sizeField?.values || [];
+    const ratios = [
+        ...new Set([
+            ...values.filter((value): value is string => typeof value === "string" && /^\d+:\d+$/.test(value)),
+            ...(profile.size.presets || []).filter((preset) => !values.length || values.includes(preset.ratio) || values.includes(preset.size)).map((preset) => preset.ratio),
+        ]),
+    ];
+    return initializeImageRatioDefaults(next, definitions, added, ratios.length ? ratios : DEFAULT_IMAGE_RATIOS);
 }
 
-export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, definitions: ImageParameter[], tiers?: string[]): ImageCapabilityConfig {
+export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, definitions: ImageParameter[], tiers?: string[], preferredRatios = DEFAULT_IMAGE_RATIOS): ImageCapabilityConfig {
     const field = profile.parameters?.find((p) => p.name === "size");
     const definition = definitions.find((p) => p.name === "size");
     if (!field || field.enabled === false || !definition) return profile;
-    const ratios = DEFAULT_IMAGE_RATIOS.filter((ratio) => imageParameterAccepts(definition, ratio));
+    const ratios = preferredRatios.filter((ratio) => imageParameterAccepts(definition, ratio));
     if (!ratios.length) return profile;
+    if (!profile.resolution.supported && field.encoding === "pixels" && !definition.values?.length && !profile.size.presets?.length && tiers === undefined) {
+        const tier = profile.size.defaultTier || "1k";
+        return projectImageParameters({ ...profile, size: { ...profile.size, defaultTier: tier, presets: ratios.map((ratio) => imagePresetForRatio(tier, ratio)) } }, profile.parameters!);
+    }
     if (!profile.resolution.supported && field.encoding !== "pixels" && tiers === undefined) {
         return projectImageParameters(
             profile,
@@ -168,9 +184,10 @@ export function initializeImageRatioDefaults(profile: ImageCapabilityConfig, def
         .flatMap((tier) =>
             ratios.flatMap((ratio) => {
                 try {
-                    return [imagePresetForRatio(tier, ratio)];
+                    return [{ ...imagePresetForRatio(tier, ratio), ratio }];
                 } catch {
-                    return [];
+                    // 保留待填写项，避免没有换算规则的档位静默丢失已选比例。
+                    return [{ tier, ratio, width: 0, height: 0, size: "" }];
                 }
             }),
         );
@@ -184,8 +201,22 @@ export function resolveImageParameters(profile: ImageCapabilityConfig, definitio
     const hasQuality = applicable.some((p) => p.name === "quality");
     const parameters = applicable.map((definition) => {
         const current = configured.get(definition.name);
-        if (current) return { ...definition, enabled: current.enabled, values: current.values ?? definition.values, min: current.min ?? definition.min, max: current.max ?? definition.max, step: current.step ?? definition.step, default: current.default };
-        if (profile.parameters) return definition;
+        if (current)
+            return {
+                ...definition,
+                enabled: current.enabled,
+                values: current.values ?? definition.values,
+                min: current.min ?? definition.min,
+                max: current.max ?? definition.max,
+                step: current.step ?? definition.step,
+                default: current.default,
+            };
+        if (profile.parameters) {
+            if (definition.name === "imageResolution" && !definition.values?.length && profile.resolution.supported) {
+                return { ...definition, values: profile.resolution.values, default: profile.resolution.default };
+            }
+            return definition;
+        }
         let enabled = definition.enabled !== false;
         let values: string[] | undefined;
         let initial: ImageParameterValue | undefined = definition.default;
@@ -241,6 +272,6 @@ export function imageParametersForSpec(spec: CapabilitySpec): ImageParameter[] {
         const constraint = spec.options?.[p.name];
         if (!constraint) return { ...p, enabled: false };
         const values = constraint.values?.filter((v): v is ImageParameterValue => v !== "*" && (typeof v === "string" || typeof v === "number" || typeof v === "boolean"));
-        return { ...p, enabled: true, ...(values?.length ? { values } : {}), min: constraint.min ?? p.min, max: constraint.max ?? p.max, step: constraint.step ?? p.step };
+        return { ...p, enabled: true, ...(constraint.values?.includes("*") ? { values: [] } : values?.length ? { values } : {}), min: constraint.min ?? p.min, max: constraint.max ?? p.max, step: constraint.step ?? p.step };
     });
 }

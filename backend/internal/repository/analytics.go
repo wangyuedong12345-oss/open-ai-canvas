@@ -192,7 +192,7 @@ func (r *Repository) filteredAPICallLogQuery(filter APICallLogFilter) *gorm.DB {
 		query = query.Where("api_call_logs.request_kind = ?", "download")
 	case "all":
 	default:
-		query = visibleAPICallLogQuery(query).Where("COALESCE(api_call_logs.request_kind, '') NOT IN ?", []string{"download", "upload", "local_save", "register"})
+		query = visibleAPICallLogQuery(query).Where("COALESCE(api_call_logs.request_kind, '') NOT IN ?", []string{"download", "upload", "local_save", "local_fallback", "offload", "register"})
 	}
 	if value := strings.TrimSpace(filter.Keyword); value != "" {
 		pattern := "%" + strings.ToLower(value) + "%"
@@ -312,7 +312,7 @@ func (r *Repository) HasVisibleFailedAPICallLogForTask(taskID string) (bool, err
 	}
 	var count int64
 	err := r.db.Model(&model.ApiCallLog{}).
-		Where("task_id = ? AND status = ? AND COALESCE(request_kind, '') NOT IN ?", taskID, model.ApiCallStatusFailed, []string{"poll", "download", "upload", "local_save", "register"}).
+		Where("task_id = ? AND status = ? AND COALESCE(request_kind, '') NOT IN ?", taskID, model.ApiCallStatusFailed, []string{"poll", "download", "upload", "local_save", "local_fallback", "offload", "register"}).
 		Count(&count).Error
 	return count > 0, err
 }
@@ -322,9 +322,9 @@ func visibleAPICallLogQuery(query *gorm.DB) *gorm.DB {
 	return query.Where("api_call_logs.request_kind <> ?", "poll")
 }
 
-func (r *Repository) VideoAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, error) {
+func (r *Repository) AsyncMediaAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, error) {
 	var root model.ApiCallLog
-	query := r.db.Where("capability = ? AND request_kind = ?", "video", "create")
+	query := r.db.Where("capability = ? AND request_kind = ?", log.Capability, "create")
 	if log.TaskID != "" {
 		query = query.Where("task_id = ?", log.TaskID)
 	} else {
@@ -334,6 +334,12 @@ func (r *Repository) VideoAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, 
 		return nil, err
 	}
 	return &root, nil
+}
+
+// VideoAPICallRoot 保留旧调用面的兼容别名。
+func (r *Repository) VideoAPICallRoot(log model.ApiCallLog) (*model.ApiCallLog, error) {
+	log.Capability = "video"
+	return r.AsyncMediaAPICallRoot(log)
 }
 
 // whereTimeRange compares instants. SQLite stores time.Time as offset text, so a
@@ -346,7 +352,8 @@ func whereTimeRange(query *gorm.DB, column string, from, to time.Time) *gorm.DB 
 		return query.Where("1 = 0")
 	}
 	if query.Dialector.Name() == "sqlite" {
-		return query.Where("unixepoch("+column+") >= ? AND unixepoch("+column+") < ?", from.Unix(), to.Unix())
+		epochColumn := column + "_epoch"
+		return query.Where(epochColumn+" >= ? AND "+epochColumn+" < ?", from.Unix(), to.Unix())
 	}
 	return query.Where(column+" >= ? AND "+column+" < ?", from, to)
 }

@@ -18,6 +18,7 @@ import (
 	"yingce/backend/internal/payment"
 	"yingce/backend/internal/platform"
 	"yingce/backend/internal/prompts"
+	"yingce/backend/internal/providercatalog"
 	"yingce/backend/internal/repository"
 	"yingce/backend/internal/skills"
 	"yingce/backend/internal/sms"
@@ -45,6 +46,8 @@ type Service struct {
 	characterTaskMu          sync.Mutex
 	activeCancels            map[string]context.CancelFunc
 	pendingStorage           map[string]int64
+	storageStatusMu          sync.Mutex
+	storageStatusCache       map[string]storageStatusEntry
 	coordinator              *platform.Coordinator
 	platform                 *platform.Service
 	taskBillingCoordinator   *taskBillingCoordinator
@@ -80,6 +83,7 @@ type Service struct {
 	auth                     *auth.Service
 	sms                      *sms.Service
 	canvas                   *canvas.Service
+	canvasRealtime           *canvas.RealtimeHub
 	workbench                *workbench.Service
 	piRunnerMu               sync.Mutex
 	piRunnerWg               sync.WaitGroup
@@ -95,6 +99,17 @@ type Service struct {
 	approvedMediaWg          sync.WaitGroup
 	approvedMediaWaiters     map[string]context.CancelFunc
 	approvedMediaClosed      bool
+	providerCatalogOnce      sync.Once
+	providerCatalog          *providercatalog.Source
+	creditPolicyMu           sync.RWMutex
+	creditPolicyCache        *CreditPolicy
+	creditPolicyAt           time.Time
+	modelAvailabilityMu      sync.RWMutex
+	modelAvailabilityCache   map[publicModelAvailabilityKey]*PublicModelAvailability
+	modelAvailabilityAt      time.Time
+	// dramaTaskHook 只在测试中替换短剧调度的任务提交，生产路径始终走 CreateTask 准入。
+	dramaTailFrameHook func(userID, resourceID string) (string, error)
+	dramaTaskHook      func(userID string, req CreateTaskRequest, timeline *renderProject) (*model.Task, error)
 }
 
 const taskWorkerConcurrency = 3
@@ -132,6 +147,8 @@ func New(repo *repository.Repository, dataDir string) *Service {
 
 func newService(repo *repository.Repository, dataDir string) *Service {
 	coordinator, err := platform.NewCoordinator(repo.Dialect())
+	canvasRealtime := canvas.NewRealtimeHub(coordinator.Redis())
+	repo = repo.WithCanvasChangeNotifier(canvasRealtime.Changed)
 	pluginRuntime, pluginRuntimeErr := newPluginRuntime(dataDir)
 	paymentRegistry, _ := payment.NewRegistry()
 	if pluginRuntime != nil {
@@ -152,6 +169,7 @@ func newService(repo *repository.Repository, dataDir string) *Service {
 	service.sms = service.newSMSDomain()
 	service.auth.SetSMSDelivery(service.sms)
 	service.canvas = canvas.New(service.repo, canvasHost{svc: service})
+	service.canvasRealtime = canvasRealtime
 	service.workbench = workbench.New(service.repo, workbenchAdminGate{svc: service}, workbenchAdminGate{svc: service})
 	service.platform = platform.New(service.repo, coordinator, platformHost{svc: service})
 	return service
@@ -173,8 +191,11 @@ func (s *Service) StartWorker() {
 	}
 	s.taskWorker().start(ctx)
 	s.startResourceDeletionWorker(ctx)
+	s.startResourceOffloadWorker()
 	s.startSkillSyncWorker(ctx)
 	s.startPaymentWorker(ctx)
+	s.startBillingAutoRefundWorker()
+	s.startDramaScheduler()
 	go s.syncAgentSessionLimit()
 	s.runWorkerLoop(func(ctx context.Context) {
 		ticker := time.NewTicker(3 * time.Second)

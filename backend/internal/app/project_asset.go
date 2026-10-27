@@ -55,6 +55,7 @@ type ProjectAssetSummary struct {
 	UpdatedAt        time.Time                `json:"updatedAt"`
 	Source           string                   `json:"source,omitempty"`
 	Character        *CharacterCardSummary    `json:"character,omitempty"`
+	Visual           *ProjectAssetVisualSummary `json:"visual,omitempty"`
 }
 
 type AssetProjectRelation struct {
@@ -220,7 +221,7 @@ func (s *Service) assetFromUploadedResource(userID string, resourceID string, ti
 			"storageKey": "resource:" + resource.ID,
 			"mimeType":   resource.MimeType,
 			"kind":       resource.Kind,
-			"size":       resource.Size,
+			"bytes":      resource.Size,
 			"width":      resource.Width,
 			"height":     resource.Height,
 			"durationMs": resource.DurationMs,
@@ -247,6 +248,7 @@ func (s *Service) assetFromUploadedResource(userID string, resourceID string, ti
 		CreatedAt:   resource.CreatedAt,
 		UpdatedAt:   resource.UpdatedAt,
 	}
+	asset.PayloadJSON = string(clientAssetPayload(*asset))
 	// 不在此预落库：资产创建交给 LinkProjectAsset 的事务统一提交，
 	// 事务失败时与链接一起回滚，避免留下“有资产无链接”的孤儿记录。
 	return asset, nil
@@ -466,9 +468,16 @@ func (s *Service) ConfirmProjectAssetCandidate(userID string, projectID string, 
 			characterPayload, marshalErr = characterAssetPayload(assetID, versionID, candidate.Name, json.RawMessage(candidate.DetailsJSON), now, now)
 			payload = []byte(characterPayload)
 		} else {
+			if projectVisualCategory(candidate.Category) {
+				kind = "entity"
+			}
+			data := map[string]any{"content": ""}
+			if kind == "entity" {
+				data = map[string]any{"definition": json.RawMessage(candidate.DetailsJSON)}
+			}
 			payload, marshalErr = json.Marshal(map[string]any{
 				"id": assetID, "kind": kind, "category": candidate.Category, "status": model.AssetVersionStatusConfirmed,
-				"primaryVersionId": versionID, "title": candidate.Name, "tags": []string{}, "data": map[string]string{"content": ""},
+				"primaryVersionId": versionID, "title": candidate.Name, "coverUrl": "", "tags": []string{}, "data": data,
 				"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
 			})
 		}
@@ -595,6 +604,26 @@ func (s *Service) projectAssetSummary(userID string, projectID string, asset *mo
 			return ProjectAssetSummary{}, cardErr
 		}
 		summary.Character = &card
+	}
+	if projectVisualCategory(asset.Category) && asset.PrimaryVersionID != "" {
+		for _, version := range versions {
+			if version.ID != asset.PrimaryVersionID {
+				continue
+			}
+			var definition map[string]any
+			if err := json.Unmarshal([]byte(version.DefinitionJSON), &definition); err != nil {
+				return ProjectAssetSummary{}, err
+			}
+			// 普通上传图片仍走媒体卡；有提取设定的场景、道具提供出图流程。
+			if asset.Kind == "entity" || definition["prompt"] != nil {
+				status := "missing"
+				if asset.Kind == "image" && storageKey != "" {
+					status = "ready"
+				}
+				summary.Visual = &ProjectAssetVisualSummary{Definition: definition, Status: status}
+			}
+			break
+		}
 	}
 	return summary, nil
 }

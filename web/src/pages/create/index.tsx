@@ -21,6 +21,7 @@ import { loadCreationConversations, pendingCreationTaskIds, removeCreationConver
 import { resolveModelChannel, resolveModelRequestConfig, selectableModelsByCapability, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
 import { useAssetStore, type Asset } from "@/stores/use-asset-store";
+import { loadAssetsForUse, saveRemoteUserDataNow } from "@/services/user-data-sync";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
@@ -28,11 +29,13 @@ import type { PromptOptimizerProvider } from "@/lib/plugins/plugin-types";
 import { promptOptimizerPlugin, PROMPT_OPTIMIZER_PLUGIN_ID } from "@/lib/plugins/builtin/prompt-optimizer";
 import { createPluginHostContext } from "@/services/plugin-host";
 import { usePluginStore } from "@/stores/use-plugin-store";
-import { buildCreationMentionReferences, expandCreationPrompt, reconcileCreationAttachmentLimit, reconcileCreationAttachmentLimits, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference, type CreationReferenceLimits } from "./creation-references";
-import { creationAttachmentsFromLibrarySelection, creationAttachmentFromAudio, creationAttachmentFromDocument, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
+import { buildCreationMentionReferences, expandCreationPrompt, reconcileCreationAttachmentLimit, reconcileCreationAttachmentLimits, removeCreationReferenceTokens, replaceCreationAttachmentReference, selectedCreationReferences, type CreationReference } from "./creation-references";
+import { creationAttachmentFromAudio, creationAttachmentFromDocument, creationAttachmentFromImage, creationAttachmentFromVideo, creationAttachmentKind, creationAudioAsset, creationFileAccepted, creationImageAsset, creationMediaAspectRatio, creationUploadAccept, creationVideoAsset, removeCreationAttachment, splitCreationAttachments, type CreationAttachment } from "./creation-assets";
+import { creationLibraryDisabledReason, creationLibrarySelectionToAttachments } from "./creation-library";
 import { defaultCreationMode, modeLabels, type CreationConversation, type CreationMessage, type CreationMode, type CreationRetryContext, type CreationSettings, type CreationShotRailEntry, type CreationStatus } from "./creation-types";
 import { attachCreationTaskContexts, completedCreationGenerationTask, conversationTimestamp, creationShotRail, creationVideoShotOrdinal, isImageAttachment, isVideoAttachment, materializeCreationTaskResults, newConversation, newMessage, reconcileCreationTaskMessages } from "./creation-conversations";
 import { CreationComposer, CreationEmptySuggest, CreationHistoryDrawer, CreationMessageView, CreationModeTabs, CreationWorkspaceToolbar, creationAssetCategoryLabels } from "./creation-workspace";
+import { CreationRecentCanvases } from "./creation-recent-canvases";
 import { CreationAgentEntry } from "./creation-agent-entry";
 import { createCreationSubmitGate } from "./creation-submit-gate";
 import { creationVideoConfig } from "./creation-generation-config";
@@ -44,17 +47,6 @@ type CreationRuntime = Awaited<ReturnType<typeof loadCreationRuntime>>;
 
 const TEXT_STREAMING_PREF_KEY = "creation.composer.text-streaming";
 const TEXT_THINKING_PREF_KEY = "creation.composer.text-thinking";
-
-function creationLibraryDisabledReason(mode: CreationMode, kind: string | undefined, videoLimits?: CreationReferenceLimits) {
-    if (!kind || !["image", "video", "audio"].includes(kind)) return "此素材不支持作为创作参考内容";
-    if (mode === "image") return kind === "image" ? undefined : "图片创作仅支持参考图";
-    if (mode !== "video") return undefined;
-
-    const maximum = kind === "image" ? videoLimits?.maxImages : kind === "video" ? videoLimits?.maxVideos : kind === "audio" ? videoLimits?.maxAudios : 0;
-    if ((maximum || 0) > 0) return undefined;
-    const label = kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "image" ? "图片" : "此类素材";
-    return `当前视频模型不支持参考${label}`;
-}
 
 function readComposerPref(key: string, fallback: boolean): boolean {
     try {
@@ -400,20 +392,17 @@ export default function CreatePage() {
         }
     };
 
-    // 灵感库「用这个创意创作」跳过来时把提示词和类型带上。
-    // 用完立刻清掉路由状态：留着的话，用户前进后退回到这一页会被重复填充一次。
     const inspirationHandoff = location.state as { inspirationPrompt?: string; inspirationMode?: CreationMode } | null;
     useEffect(() => {
-        const handoffPrompt = inspirationHandoff?.inspirationPrompt;
-        if (!handoffPrompt) return;
+        if (!hydrated || !composerPreferencesInitialized || !inspirationHandoff?.inspirationPrompt) return;
         setAgentMode(false);
-        if (inspirationHandoff?.inspirationMode) selectMode(inspirationHandoff.inspirationMode);
-        setPrompt(handoffPrompt);
+        if (inspirationHandoff.inspirationMode) selectMode(inspirationHandoff.inspirationMode);
+        setPrompt(inspirationHandoff.inspirationPrompt);
         navigate(".", { replace: true, state: null });
         window.requestAnimationFrame(() => composerFocusRef.current?.focus());
-        // selectMode 每次渲染都是新函数，放进依赖会让本效果反复触发；靠 state 置空来收敛即可。
+        // 路由状态消费后清空，避免前进后退时覆盖用户随后输入的内容。
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [inspirationHandoff, navigate]);
+    }, [hydrated, composerPreferencesInitialized, inspirationHandoff, navigate]);
 
     const setComposerRatio = (value: string) => {
         setRatio(value);
@@ -502,12 +491,13 @@ export default function CreatePage() {
         return assetIds;
     };
 
-    const handleLibrarySelect = (selectedIds: string[], pickedItems: AssetLibraryPickerItem[] = []) => {
-        const next = creationAttachmentsFromLibrarySelection(selectedIds, [...libraryItems, ...pickedItems].map((item) => ({
-            ...item,
-            disabledReason: creationLibraryDisabledReason(mode, item.external?.item.kind || item.asset?.kind, videoReferenceLimits),
-        })));
+    const handleLibrarySelect = async (selectedIds: string[], pickedItems = libraryItems) => {
+        const next = creationLibrarySelectionToAttachments(selectedIds, pickedItems, mode, videoReferenceLimits);
         if (!next.length) return;
+        const selected = new Set(selectedIds);
+        const cachedIds = new Set(useAssetStore.getState().assets.map((asset) => asset.id));
+        const uncachedAssetIds = pickedItems.filter((item) => item.asset && selected.has(item.id) && !cachedIds.has(item.id)).map((item) => item.id);
+        if (uncachedAssetIds.length) await loadAssetsForUse(uncachedAssetIds);
         setAttachments((current) => {
             const candidates = [...current.filter((item) => !next.some((candidate) => candidate.id === item.id)), ...next];
             const reconciled = mode === "video" && videoReferenceLimits
@@ -866,6 +856,7 @@ export default function CreatePage() {
             const referenceKeys = new Set(source.messages.flatMap((item) => (item.attachments || []).map((attachment) => attachment.storageKey).filter(Boolean)));
             const referenceAssetIds = assets.filter((asset) => (asset.kind === "image" || asset.kind === "video") && asset.data.storageKey && referenceKeys.has(asset.data.storageKey)).map((asset) => asset.id);
             const assetIds = [...generatedAssetIds, ...referenceAssetIds];
+            if (assetIds.length) await saveRemoteUserDataNow([]);
             const result = await continueCreationConversationOnCanvas(source);
             if (scope !== getActiveUserScope()) return;
             const next = updateCreationConversationSnapshot(conversationsRef.current, source.id, (item) => ({ ...item, canvasId: result.id }));
@@ -1016,6 +1007,13 @@ export default function CreatePage() {
 
 
     const generationActive = activeConversation.messages.some((message) => message.role === "assistant" && message.status === "pending");
+    const startPrompt = (nextMode: CreationMode, nextPrompt: string) => {
+        setAgentMode(false);
+        selectMode(nextMode);
+        setPrompt(nextPrompt);
+        threadScrollRef.current?.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+        window.requestAnimationFrame(() => composerFocusRef.current?.focus({ preventScroll: true }));
+    };
 
     const composerProps = {
         mode,
@@ -1090,6 +1088,13 @@ export default function CreatePage() {
                     <p>从一个画面、一个角色或一句话开始，继续你的创作。</p>
                 </div>
                 <section ref={launchpadRef} className="creation-launchpad" aria-label="开始创作">
+                    <header className="creation-start-heading">
+                        <div>
+                            <h1>和{brandName}聊聊创作想法</h1>
+                            <p>从一个画面、一个角色或一句话开始。</p>
+                        </div>
+                        <button type="button" className="creation-history-entry" aria-label="查看历史对话" aria-expanded={historyOpen} onClick={() => setHistoryOpen(true)}><History aria-hidden="true" /><span>历史对话</span></button>
+                    </header>
                     <div className={cn("creation-composer-stage is-home-mode", agentMode && "is-agent-mode")}>
                         <div className="creation-home-composer-toolbar">
                             <CreationModeTabs mode={mode} agentActive={agentMode} onAgentSelect={() => setAgentMode(true)} onModeChange={(next) => { setAgentMode(false); selectMode(next); }} />
@@ -1098,10 +1103,11 @@ export default function CreatePage() {
                         {agentMode ? <CreationAgentEntry /> : <div className="creation-empty-composer"><CreationComposer {...composerProps} variant="empty" onPromptGrowthChange={setPromptHeightGrowth} /></div>}
                     </div>
                     <CreationEmptySuggest
-                        onStartPrompt={(nextMode, prompt) => { setAgentMode(false); selectMode(nextMode); setPrompt(prompt); window.requestAnimationFrame(() => composerFocusRef.current?.focus()); }}
+                        onStartPrompt={startPrompt}
                         onOpenLibrary={() => { setAgentMode(false); selectMode("image"); setLibraryOpen(true); }}
                     />
                 </section>
+                <CreationRecentCanvases onRequireLogin={() => setLoginDialogOpen(true)} />
                 </main>
             </> : <div className="creation-thread-workbench">
                 <CreationWorkspaceToolbar onNewConversation={startNewConversation} onOpenHistory={() => setHistoryOpen(true)} shots={videoShots} onJumpToShot={jumpToShot} onContinueCanvas={() => void continueOnCanvas()} openingCanvas={openingCanvas} />
@@ -1124,7 +1130,7 @@ export default function CreatePage() {
         {libraryOpen ? <Suspense fallback={null}><AssetLibraryPickerModal
             remoteLibrary
             acceptRemoteItems
-            getDisabledReason={(asset) => creationLibraryDisabledReason(mode, asset.kind, videoReferenceLimits)}
+            remoteItemDisabledReason={(asset) => creationLibraryDisabledReason(mode, asset.kind, videoReferenceLimits)}
             open={libraryOpen}
             showRecycleBin={false}
             items={libraryItems}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { App, Button, Checkbox, Input, Modal, Popconfirm, Space, Tabs, Tooltip } from "antd";
+import { App, Button, Checkbox, Input, Modal, Popconfirm, Space, Tabs } from "antd";
+import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
 import type { ColumnsType } from "antd/es/table";
 import { Copy, Pencil, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 
@@ -202,7 +203,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
             title: "模型",
             width: 240,
             render: (_, item) => (
-                <div className="flex min-w-0 items-center gap-2.5">
+                <div className="flex min-w-0 items-center gap-2">
                     <span className="admin-channel-model-icon">
                         <ModelIcon model={item.modelKey} icon={item.icon} />
                     </span>
@@ -232,7 +233,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                     <AdminStatusBadge label="待配置" tone="warning" />
                 ),
         },
-        { title: "规格成本价 / 销售价 / 利润率", width: 310, render: (_, item) => <ChannelModelCostSummary item={item} /> },
+        { title: "规格成本价 / 销售价 / 加价", width: 310, render: (_, item) => <ChannelModelCostSummary item={item} /> },
         { title: "版本", dataIndex: "priceVersion", width: 75, render: (value) => `v${value}` },
         { title: "状态", dataIndex: "enabled", width: 85, render: (enabled) => <AdminStatusBadge label={enabled ? "启用" : "停用"} tone={enabled ? "success" : "neutral"} /> },
         {
@@ -295,7 +296,7 @@ export function ChannelModelManager({ channel, onChanged }: { channel: ModelChan
                     <h3 className="admin-channel-model-heading">
                         模型管理 <span className="admin-channel-count">{items.length}</span>
                     </h3>
-                    <p className="admin-channel-model-hint">点击“自定义排序”调整模型展示顺序；规格展示成本价 / 销售价及利润率，勾选模型可统一调价</p>
+                    <p className="admin-channel-model-hint">点击“自定义排序”调整模型展示顺序；规格展示成本价 / 销售价及加价率，勾选模型可统一调价</p>
                 </div>
                 <Space wrap>
                     <ChannelOrderDialog

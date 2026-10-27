@@ -178,6 +178,7 @@ export function AgentChatComposer({
     attachments = [],
     disabled,
     sending,
+    submitDisabled,
     running,
     placeholder,
     theme,
@@ -198,6 +199,7 @@ export function AgentChatComposer({
     attachments?: CloudAgentChatAttachment[];
     disabled?: boolean;
     sending?: boolean;
+    submitDisabled?: boolean;
     running?: boolean;
     placeholder: string;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -236,7 +238,7 @@ export function AgentChatComposer({
     const skillReferences = useMemo(() => buildSkillMentionReferences(availableSlashSkills), [availableSlashSkills]);
     const composerReferences = useMemo(() => [...references, ...skillReferences, ...attachmentReferences].filter((reference, index, all) => all.findIndex((item) => item.id === reference.id) === index), [attachmentReferences, references, skillReferences]);
     const canStop = Boolean(running && onStop);
-    const canSubmit = !disabled && !sending && Boolean(prompt.trim() || attachments.length);
+    const canSubmit = !disabled && !submitDisabled && !sending && Boolean(prompt.trim() || attachments.length);
     const reducedMotion = useReducedMotion();
     const activeSlashIndex = Math.min(Math.max(slashIndex, 0), Math.max(slashCandidates.length - 1, 0));
 
@@ -429,7 +431,7 @@ export function AgentChatComposer({
                         {slash && slashCandidates.length ? (
                             <div
                                 data-agent-slash-menu
-                                className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs overflow-hidden rounded-2xl p-1.5 shadow-2xl"
+                                className="absolute bottom-full left-0 z-[var(--z-toolbar)] mb-2 w-full max-w-xs overflow-hidden rounded-2xl p-2 shadow-2xl"
                                 style={{ background: theme.toolbar.panel, boxShadow: `0 18px 44px ${theme.spatial.shadow}` }}
                                 onMouseDown={(event) => event.preventDefault()}
                             >
@@ -437,7 +439,7 @@ export function AgentChatComposer({
                                     <button
                                         key={skill.skillId}
                                         type="button"
-                                        className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
+                                        className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-2 text-left text-xs"
                                         style={{ background: index === activeSlashIndex ? theme.toolbar.itemHover : "transparent", color: theme.node.text }}
                                         onMouseEnter={() => setSlashIndex(index)}
                                         onClick={() => applySlashSkill(skill)}
@@ -487,7 +489,7 @@ export function AgentChatComposer({
                                     type="button"
                                     disabled={stopping}
                                     aria-label="停止本轮"
-                                    title="停止当前 Agent 运行"
+                                    title="停止本轮：Agent 不再继续操作；已提交的生成任务会继续完成。只想撤回插话请点消息上的“撤回”"
                                     onClick={() => void onStop?.()}
                                     whileHover={!reducedMotion && !stopping ? { scale: 1.06, y: -1 } : undefined}
                                     whileTap={!reducedMotion && !stopping ? { scale: 0.9, y: 1 } : undefined}

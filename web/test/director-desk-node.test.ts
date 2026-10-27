@@ -49,7 +49,7 @@ describe("导演台专门节点", () => {
 
     test("导演台菜单只保留节点管理和移除，普通视频保留上传并隐藏生成设置", () => {
         const director = normalizeDirectorDeskNodes([video("镜头 1", { previsSceneId: "scene", status: "error" })])[0];
-        const context = (node: CanvasNodeData) => ({ node, nodeMetadata: node.metadata, workspaceMode: "professional" } as ToolContext);
+        const context = (node: CanvasNodeData) => ({ node, nodeMetadata: node.metadata, workspaceMode: "professional", handlers: {} } as ToolContext);
         const ctx = context(director);
         const tools = nodeHoverToolbarTools.filter((tool) => !tool.applicable || tool.applicable(ctx));
         expect(tools.map((tool) => tool.id).sort()).toEqual(["info", "delete", "node-lock"].sort());

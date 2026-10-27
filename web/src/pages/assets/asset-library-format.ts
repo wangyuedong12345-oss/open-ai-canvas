@@ -23,7 +23,7 @@ export const assetKindIcons: Record<LibraryAsset["kind"], LucideIcon> = {
 };
 
 export function assetSummary(asset: LibraryAsset) {
-    if (asset.kind === "entity") return characterAssetSummary(asset);
+    if (asset.kind === "entity") return asset.category === "environment" || asset.category === "prop" ? String(asset.data.definition.description || "待生成图片") : characterAssetSummary(asset);
     if (asset.kind === "text") return asset.data.content;
     if (asset.kind === "audio") return `${formatAssetDuration(asset.data.durationMs)} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
     if (asset.kind === "model") return `${asset.data.fileName} · ${formatBytes(asset.data.bytes)} · ${asset.data.mimeType}`;
@@ -45,7 +45,7 @@ export function assetProjectLabel(asset: LibraryAsset) {
     return Array.isArray(asset.metadata?.projectIds) && asset.metadata.projectIds.length ? "已关联项目" : "未关联项目";
 }
 
-/** 卡片上的项目归属标签：优先用列表接口返回的关联数据，缺省时回退 metadata 提示。 */
+/** 项目归属优先使用接口返回的关联数据。 */
 export function assetProjectRelationLabel(relations: AssetProjectRelation[] | undefined, asset: LibraryAsset) {
     if (relations === undefined) return assetProjectLabel(asset);
     if (relations.length === 0) return "未关联项目";
@@ -53,7 +53,8 @@ export function assetProjectRelationLabel(relations: AssetProjectRelation[] | un
     return `${relations[0].projectName} 等 ${relations.length} 个项目`;
 }
 
-export function assetKindLabel(kind: AssetKind) {
+export function assetKindLabel(kind: AssetKind, category?: string) {
+    if (kind === "entity" && (category === "environment" || category === "prop")) return `${assetCategoryLabel(category)}设定`;
     return kind === "image" ? "图片" : kind === "video" ? "视频" : kind === "audio" ? "音频" : kind === "model" ? "3D 模型" : kind === "entity" ? "角色" : "文本";
 }
 

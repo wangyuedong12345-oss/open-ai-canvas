@@ -1,5 +1,7 @@
-import { App, Button, Input, InputNumber, Modal, Progress, Segmented, Select, Spin, Switch, Tooltip } from "antd";
-import { Check, Camera, ChevronDown, Clapperboard, Expand, FileImage, History, ImagePlus, Images, LoaderCircle, Mic, Palette, Plus, RotateCcw, Search, ShoppingBag, Sparkles, Upload, UserRound, Video, X } from "lucide-react";
+import { createClientUUID } from "@/lib/client-id";
+import { App, Button, Input, InputNumber, Modal, Progress, Segmented, Select, Spin, Switch } from "antd";
+import { AntTooltip as Tooltip } from "@/components/ui/base/tooltip/ant-tooltip";
+import { Check, Camera, ChevronDown, ChevronUp, Clapperboard, Expand, FileImage, History, ImagePlus, Images, LoaderCircle, Mic, Palette, Plus, RotateCcw, Search, ShoppingBag, Sparkles, Upload, UserRound, Video, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -16,8 +18,8 @@ import { creationVideoConfig } from "@/pages/create/creation-generation-config";
 import { imageQualityLabel } from "@/lib/image-quality";
 import { modelQuoteRequest } from "@/lib/model-pricing";
 import { quoteModel } from "@/services/api/logical-models";
-import { submitBackendGenerationTask } from "@/services/api/generation-task";
-import { cancelGenerationTask, queryGenerationTask, retryGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { prepareBackendGenerationTask } from "@/services/api/generation-task";
+import { createGenerationTask, cancelGenerationTask, queryGenerationTask, retryGenerationTask, type GenerationTask } from "@/services/api/task-center";
 import { capabilitySupportedModes, createWorkbenchTask, listWorkbenchTasks, listWorkbenchTools, normalizeWorkbenchGuide, resolveWorkbenchResourceURL, type WorkbenchKind, type WorkbenchPromptPreset, type WorkbenchTool } from "@/services/api/workbench";
 import { resourceStorageKey, resolveResourceUrl, uploadResourceFile } from "@/services/api/resources";
 import { formatCredits, requestCreditCost } from "@/constant/credits";
@@ -26,7 +28,7 @@ import { logicalModelIDForConfig, modelDisplayName, modelOptionName, resolveMode
 import { useUserStore } from "@/stores/use-user-store";
 
 import { workbenchCategoryLabel, workbenchCategories } from "./workbench-catalog";
-import { missingWorkbenchInput, workbenchPromptRequired } from "./workbench-input";
+import { missingWorkbenchInput, workbenchPromptRequired, workbenchVideoOperation } from "./workbench-input";
 import "./workbench.css";
 import "./workbench-count-picker.css";
 
@@ -272,7 +274,12 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         const toolId = searchParams.get("tool");
         if (!toolId || !tools.length) return;
         const next = tools.find((item) => item.id === toolId);
-        if (next) setTool(next);
+        // 页内选择和任务恢复会先更新 tool 再改地址，这里只处理从外部链接切换过来的工具。
+        if (!next || next.id === tool?.id) return;
+        setTool(next);
+        switchToolPrompt(next, searchParams.get("preset"));
+        // 只随地址和目录变化触发；tool 变化不能触发，否则任务恢复在改地址前会被旧地址拉回。
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchParams, tools]);
 
     useEffect(() => {
@@ -336,6 +343,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
             input: {
                 textCount: prompt.trim() ? 1 : 0,
                 imageCount: references.filter((reference) => reference.kind === "image").length,
+                referenceImageCount: references.filter((reference) => reference.kind === "image" && reference.role !== "first_frame" && reference.role !== "last_frame").length,
                 videoCount: references.filter((reference) => reference.kind === "video").length,
                 audioCount: references.filter((reference) => reference.kind === "audio").length,
                 characterCount: 0,
@@ -462,32 +470,45 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         message.success("工作台已重置");
     };
 
+    // 提示词为空，或仍是当前预设的原文（用户没改过），切换时可以直接替换；改过的内容先确认再动。
+    const promptReplaceable = () => !prompt.trim() || (preset !== null && prompt.trim() === preset.promptTemplate.trim());
+
+    // 切换工具后提示词必须跟着新工具走：未改动的模板直接换成新工具的预设（新工具没有预设则清空），
+    // 用户改过的内容弹出"替换 / 追加 / 返回"确认，不能静默保留上一个工具的模板。
+    const switchToolPrompt = (next: WorkbenchTool | null, preferredPresetId?: string | null) => {
+        const replaceable = promptReplaceable();
+        const nextPreset = next?.presets.find((item) => item.id === preferredPresetId) || next?.presets[0] || null;
+        setPresetPending(null);
+        if (!nextPreset) {
+            setPreset(null);
+            if (replaceable) setPrompt("");
+            return;
+        }
+        if (replaceable) {
+            setPrompt(nextPreset.promptTemplate);
+            setPreset(nextPreset);
+            return;
+        }
+        setPreset(null);
+        setPresetPending(nextPreset);
+    };
+
     const chooseTool = (next: WorkbenchTool | null) => {
         references.forEach(revokeReferencePreview);
         setReferences([]);
         setUploadSlotKey(undefined);
         setTool(next);
         setToolLibraryOpen(false);
-        setPreset(null);
-        setPresetPending(null);
         const params = new URLSearchParams(searchParams);
         if (next) params.set("tool", next.id);
         else params.delete("tool");
         params.delete("preset");
         setSearchParams(params, { replace: true });
-        // 工具选择必须真实作用于提示词：有预设模板且当前提示词为空时直接填充首个预设，
-        // 否则展示预设 chips 让用户主动应用，避免"选了工具没反应"。
-        if (next?.presets.length) {
-            const first = next.presets[0];
-            if (!prompt.trim()) {
-                setPrompt(first.promptTemplate);
-                setPreset(first);
-            }
-        }
+        switchToolPrompt(next);
     };
 
     const choosePreset = (next: WorkbenchPromptPreset) => {
-        if (!prompt.trim()) {
+        if (promptReplaceable()) {
             setPrompt(next.promptTemplate);
             setPreset(next);
             return;
@@ -526,7 +547,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         const picked = accepted.slice(0, Math.max(0, maxCount - currentCount));
         if (picked.length < accepted.length) message.warning("部分素材超过当前输入槽位数量上限，未添加");
         const pending: WorkbenchReference[] = picked.map((file) => ({
-            id: crypto.randomUUID(),
+            id: createClientUUID(),
             name: file.name,
             kind: (file.type.startsWith("image/") ? "image" : file.type.startsWith("video/") ? "video" : "audio") as WorkbenchReference["kind"],
             previewUrl: URL.createObjectURL(file),
@@ -610,6 +631,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                 ...(videoRequest ? { videoModel: selectedModel, size: videoRequest.ratio, videoSeconds: videoRequest.seconds, vquality: videoRequest.resolution.replace(/p$/i, "") } : {}),
             };
             const readyReferences = references.filter((reference) => reference.resourceId);
+            const videoOperation = kind === "video" ? workbenchVideoOperation(readyReferences) : undefined;
             const referenceSnapshot = readyReferences.map((reference) => ({ resourceId: reference.resourceId!, kind: reference.kind, role: reference.role, ...(reference.slotKey ? { slotKey: reference.slotKey } : {}) }));
             const createdTask =
                 logicalModelId || channel?.scope === "system"
@@ -623,7 +645,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                           parameters,
                           references: readyReferences.map((reference) => ({ resourceId: reference.resourceId!, kind: reference.kind, role: reference.role, ...(reference.slotKey ? { slotKey: reference.slotKey } : {}) })),
                       })
-                    : await submitBackendGenerationTask({
+                    : await prepareBackendGenerationTask({
                           mode: kind,
                           prompt: submittedPrompt,
                           config: generationConfig,
@@ -663,11 +685,17 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                           metadata: {
                               source: "workbench",
                               workbenchKind: kind,
+                              ...(videoOperation ? { videoEditOperation: videoOperation } : {}),
+                              ...Object.fromEntries(
+                                  readyReferences
+                                      .filter((reference) => reference.role === "first_frame" || reference.role === "last_frame")
+                                      .map((reference) => [reference.role === "first_frame" ? "videoStartFrameNodeId" : "videoEndFrameNodeId", reference.id]),
+                              ),
                               ...(tool ? { workbenchToolId: tool.id, workbenchToolName: tool.name } : {}),
                               ...(tool && preset ? { workbenchPresetId: preset.id } : {}),
                               workbench: { kind, ...(tool ? { toolId: tool.id } : {}), ...(tool && preset ? { presetId: preset.id } : {}), parameters, references: referenceSnapshot },
                           },
-                      });
+                      }).then((taskInput) => createGenerationTask({ ...taskInput, ...(videoOperation ? { operation: videoOperation } : {}) }));
             const task = await queryGenerationTask(createdTask.id);
             setTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
             if (revision === workbenchRevisionRef.current) {
@@ -739,7 +767,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
         setReferences([]);
         const restoredReferences = await Promise.all(
             snapshot.references.map(async (reference, index): Promise<WorkbenchReference> => ({
-                id: crypto.randomUUID(),
+                id: createClientUUID(),
                 name: `${reference.kind === "image" ? "图片" : reference.kind === "video" ? "视频" : "音频"} ${index + 1}`,
                 kind: reference.kind,
                 resourceId: reference.resourceId,
@@ -1218,6 +1246,7 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
                                             input: {
                                                 textCount: prompt.trim() ? 1 : 0,
                                                 imageCount: references.filter((reference) => reference.kind === "image").length,
+                                                referenceImageCount: references.filter((reference) => reference.kind === "image" && reference.role !== "first_frame" && reference.role !== "last_frame").length,
                                                 videoCount: references.filter((reference) => reference.kind === "video").length,
                                                 audioCount: references.filter((reference) => reference.kind === "audio").length,
                                                 characterCount: 0,
@@ -1497,18 +1526,127 @@ export function WorkbenchPage({ kind }: { kind: WorkbenchKind }) {
 }
 
 function CountPicker({ value, max, onChange }: { value: string; max: number; onChange: (value: string) => void }) {
-    const limit = Math.min(10, Math.max(1, max || 1));
+    const limit = Math.max(1, max || 15);
     const current = Math.min(limit, Math.max(1, Math.floor(Number(value) || 1)));
+    const isSelected = current >= 4;
+    const [draftValue, setDraftValue] = useState(() => (current >= 4 ? String(current) : "4"));
+
+    useEffect(() => {
+        if (current >= 4) {
+            setDraftValue(String(current));
+        }
+    }, [current]);
+
+    const handleSelectStepper = () => {
+        const num = Math.max(1, Math.min(limit, parseInt(draftValue, 10) || 4));
+        onChange(String(num));
+    };
+
+    const handleStepUp = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+        const next = Math.min(limit, base + 1);
+        setDraftValue(String(next));
+        onChange(String(next));
+    };
+
+    const handleStepDown = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+        const next = Math.max(1, base - 1);
+        setDraftValue(String(next));
+        onChange(String(next));
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setDraftValue(e.target.value);
+    };
+
+    const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        const num = Math.max(1, Math.min(limit, parseInt(e.target.value, 10) || 4));
+        setDraftValue(String(num));
+        onChange(String(num));
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            e.currentTarget.blur();
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+            const next = Math.min(limit, base + 1);
+            setDraftValue(String(next));
+            onChange(String(next));
+        } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            const base = current >= 4 ? current : (parseInt(draftValue, 10) || 4);
+            const next = Math.max(1, base - 1);
+            setDraftValue(String(next));
+            onChange(String(next));
+        }
+    };
+
     return (
         <div className="workbench-count-picker">
-            <span>生成数量</span>
+            <span>生成张数</span>
             <div>
-                {Array.from({ length: limit }, (_, index) => index + 1).map((item) => (
-                    <button key={item} type="button" aria-pressed={current === item} className={current === item ? "is-active" : ""} onClick={() => onChange(String(item))}>
+                {Array.from({ length: Math.min(3, limit) }, (_, index) => index + 1).map((item) => (
+                    <button
+                        key={item}
+                        type="button"
+                        aria-pressed={current === item}
+                        className={current === item ? "is-active" : ""}
+                        onClick={() => onChange(String(item))}
+                    >
                         {item}
                     </button>
                 ))}
-                <InputNumber min={1} max={limit} precision={0} value={current} aria-label="输入生成数量" onChange={(next) => onChange(String(Math.min(limit, Math.max(1, Number(next) || 1))))} />
+                {limit >= 4 ? (
+                    <div
+                        className={`workbench-count-stepper ${isSelected ? "is-active" : ""}`}
+                        onClick={handleSelectStepper}
+                    >
+                        <input
+                            type="text"
+                            inputMode="numeric"
+                            aria-label="自定义生成张数"
+                            value={draftValue}
+                            onChange={handleInputChange}
+                            onBlur={handleInputBlur}
+                            onKeyDown={handleKeyDown}
+                            onFocus={(e) => {
+                                e.currentTarget.select();
+                                if (current < 4) {
+                                    handleSelectStepper();
+                                }
+                            }}
+                        />
+                        <div className="workbench-count-stepper-controls">
+                            <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={handleStepUp}
+                                disabled={current >= limit && isSelected}
+                                className="workbench-count-stepper-btn"
+                                title="增加 1 张"
+                                aria-label="增加 1 张"
+                            >
+                                <ChevronUp className="size-2.5" />
+                            </button>
+                            <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={handleStepDown}
+                                disabled={current <= 1 && isSelected}
+                                className="workbench-count-stepper-btn"
+                                title="减少 1 张"
+                                aria-label="减少 1 张"
+                            >
+                                <ChevronDown className="size-2.5" />
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
             </div>
         </div>
     );

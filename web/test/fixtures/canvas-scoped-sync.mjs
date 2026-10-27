@@ -20,6 +20,7 @@ const mutations = [];
 const uploadedAssets = [];
 const baseAsset = { id: 'related', kind: 'text', title: '文本', coverUrl: '', tags: [], data: { content: '原内容' }, createdAt: '', updatedAt: '' };
 mock.module('@/services/api/user-data', () => ({
+    changeCanvasEditLease: async () => { throw new Error('unexpected edit lease request in scoped save fixture'); },
     getRemoteUserDataSnapshot: async () => ({ assets: [baseAsset], projects: [] }),
     getRemoteCanvasProject: async id => ({ project: remote.get(id) }),
     applyRemoteCanvasOperations: async (id, request) => {

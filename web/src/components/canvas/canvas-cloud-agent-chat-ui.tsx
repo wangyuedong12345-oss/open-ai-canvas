@@ -3,7 +3,7 @@ import { Button } from "antd";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type SyntheticEvent } from "react";
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, List, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Wrench, XCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronUp, CircleAlert, CircleDot, Eye, HelpCircle, List, ListChecks, LoaderCircle, Pencil, Plus, RotateCcw, Sparkles, Undo2, Wrench, XCircle } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { AIMessageMarkdown } from "@/components/ai/ai-message-markdown";
@@ -13,6 +13,7 @@ import { agentToolCategory, agentToolCategoryLabel, agentToolErrorClassLabel, ag
 import { agentOperationCategory, agentOperationFailed, agentOperationSegmentLabel } from "@/lib/canvas/agent-operation-feed";
 import { agentToolRetry, type AgentToolRetryAttempt } from "@/lib/canvas/agent-tool-retry";
 import { agentErrorContent } from "@/lib/canvas/agent-error-presentation";
+import { agentCanvasUndoKey, agentCanvasUndoTarget, type AgentCanvasUndoState, type AgentCanvasUndoTarget } from "@/lib/canvas/agent-canvas-undo";
 import { AgentImagePreview } from "./canvas-cloud-agent-composer";
 
 // 输入区已拆到 canvas-cloud-agent-composer.tsx；附件类型与引用转换在 canvas-cloud-agent-attachments.ts。
@@ -34,9 +35,9 @@ export type CloudAgentFormOption = { id?: string; label: string; detail?: string
 export type CloudAgentFormField = {
     id: string;
     title: string;
-    type: "single_select" | "segmented" | "text" | "textarea" | "model_picker";
+    type: "single_select" | "multi_select" | "segmented" | "text" | "textarea" | "model_picker";
     options?: CloudAgentFormOption[];
-    defaultValue?: string;
+    defaultValue?: string | string[];
     required?: boolean;
     allowCustom?: boolean;
     placeholder?: string;
@@ -54,8 +55,8 @@ export type CloudAgentUserQuestion = {
 export type CloudAgentFormAnswer = {
     type: "form_answer";
     questionId?: string;
-    answers: Record<string, string>;
-    displayAnswers?: Record<string, string>;
+    answers: Record<string, string | string[]>;
+    displayAnswers?: Record<string, string | string[]>;
     fieldTitles?: Record<string, string>;
     skippedFields?: string[];
     useRecommendedDefaults?: boolean;
@@ -86,7 +87,7 @@ export type CloudAgentChatMessage = {
     detail?: unknown;
     attachments?: CloudAgentChatAttachment[];
     canvasReferenceNodeId?: string;
-    interjection?: "sent" | "undelivered";
+    interjection?: "sent" | "delivered" | "undelivered" | "withdrawn";
 };
 
 /**
@@ -121,10 +122,17 @@ const AGENT_FORM_VALUE_LABELS: Record<string, string> = {
     absurd: "荒诞",
 };
 
-function formAnswerRecord(value: unknown): Record<string, string> | undefined {
+function formAnswerRecord(value: unknown): Record<string, string | string[]> | undefined {
     if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-    const entries = Object.entries(value).filter(([, item]) => typeof item === "string" && item.trim());
-    return entries.length ? Object.fromEntries(entries.map(([key, item]) => [key, String(item)])) : undefined;
+    const entries: Record<string, string | string[]> = {};
+    for (const [key, item] of Object.entries(value)) {
+        if (typeof item === "string" && item.trim()) entries[key] = item;
+        if (Array.isArray(item)) {
+            const values = item.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()));
+            if (values.length) entries[key] = values;
+        }
+    }
+    return Object.keys(entries).length ? entries : undefined;
 }
 
 export function parseCloudAgentFormAnswer(value: string): CloudAgentFormAnswer | undefined {
@@ -139,7 +147,10 @@ export function parseCloudAgentFormAnswer(value: string): CloudAgentFormAnswer |
             questionId: typeof record.questionId === "string" ? record.questionId : undefined,
             answers,
             displayAnswers: formAnswerRecord(record.displayAnswers),
-            fieldTitles: formAnswerRecord(record.fieldTitles),
+            fieldTitles:
+                record.fieldTitles && typeof record.fieldTitles === "object" && !Array.isArray(record.fieldTitles)
+                    ? Object.fromEntries(Object.entries(record.fieldTitles).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+                    : undefined,
             skippedFields: Array.isArray(record.skippedFields) ? record.skippedFields.filter((item): item is string => typeof item === "string") : [],
             useRecommendedDefaults: record.useRecommendedDefaults === true,
             additionalNotes: typeof record.additionalNotes === "string" ? record.additionalNotes : undefined,
@@ -159,7 +170,7 @@ function agentFormValueLabel(value: string) {
 
 function AgentFormAnswerCard({ answer, theme }: { answer: CloudAgentFormAnswer; theme: (typeof canvasThemes)[keyof typeof canvasThemes] }) {
     const values = answer.displayAnswers && Object.keys(answer.displayAnswers).length ? answer.displayAnswers : answer.answers;
-    const entries = Object.entries(values).filter(([, value]) => value.trim());
+    const entries = Object.entries(values).filter(([, value]) => (Array.isArray(value) ? value.length > 0 : value.trim()));
     return (
         <div className="agent-form-answer-card" style={{ color: theme.node.text }}>
             <div className="agent-form-answer-heading">已确认创作方向</div>
@@ -169,13 +180,21 @@ function AgentFormAnswerCard({ answer, theme }: { answer: CloudAgentFormAnswer; 
                     {entries.map(([key, value]) => (
                         <div className="agent-form-answer-row" key={key}>
                             <span className="agent-form-answer-label">{agentFormFieldLabel(key, answer.fieldTitles)}</span>
-                            <span className="agent-form-answer-value">{answer.displayAnswers?.[key] || agentFormValueLabel(value)}</span>
+                            <span className="agent-form-answer-value">{answer.displayAnswers?.[key] || (Array.isArray(value) ? value.map(agentFormValueLabel).join("、") : agentFormValueLabel(value))}</span>
                         </div>
                     ))}
-                    {answer.additionalNotes ? <div className="agent-form-answer-row"><span className="agent-form-answer-label">补充说明</span><span className="agent-form-answer-value">{answer.additionalNotes}</span></div> : null}
+                    {answer.additionalNotes ? (
+                        <div className="agent-form-answer-row">
+                            <span className="agent-form-answer-label">补充说明</span>
+                            <span className="agent-form-answer-value">{answer.additionalNotes}</span>
+                        </div>
+                    ) : null}
                 </div>
             ) : answer.additionalNotes ? (
-                <div className="agent-form-answer-row"><span className="agent-form-answer-label">补充说明</span><span className="agent-form-answer-value">{answer.additionalNotes}</span></div>
+                <div className="agent-form-answer-row">
+                    <span className="agent-form-answer-label">补充说明</span>
+                    <span className="agent-form-answer-value">{answer.additionalNotes}</span>
+                </div>
             ) : (
                 <div className="agent-form-answer-note">已确认，按推荐方案继续</div>
             )}
@@ -370,6 +389,10 @@ export function AgentChatMessage({
     onApproveTool,
     onRetry,
     onFocusNode,
+    onUndo,
+    undoStates,
+    onWithdrawInterjection,
+    withdrawing = false,
 }: {
     item: CloudAgentChatMessage;
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
@@ -380,6 +403,10 @@ export function AgentChatMessage({
     onApproveTool?: (id: string) => void;
     onRetry?: () => void;
     onFocusNode?: (nodeId: string) => void;
+    onUndo?: (target: AgentCanvasUndoTarget) => void;
+    undoStates?: Record<string, AgentCanvasUndoState>;
+    onWithdrawInterjection?: (messageId: string) => void;
+    withdrawing?: boolean;
 }) {
     const isUser = item.role === "user";
     const isSystem = item.role === "system";
@@ -438,7 +465,7 @@ export function AgentChatMessage({
         if (objectField(item.detail, "status") === "pending") return <AgentPendingToolCard summary={item.text} detail={item.detail} theme={theme} onReject={() => onRejectTool?.(item.id)} onApprove={() => onApproveTool?.(item.id)} />;
         return (
             <div className="flex min-w-0 items-start">
-                <AgentToolCard title={item.title || "工具调用"} text={item.text} detail={item.detail} theme={theme} references={references} onFocusNode={onFocusNode} />
+                <AgentToolCard title={item.title || "工具调用"} text={item.text} detail={item.detail} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
             </div>
         );
     }
@@ -481,11 +508,28 @@ export function AgentChatMessage({
         <div className={`flex items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}>
             <div className={`agent-message-body min-w-0 text-sm leading-6 ${isUser ? "agent-message-user max-w-[82%] px-4 py-3 text-right" : "max-w-full flex-1 text-left"}`} style={{ color }}>
                 {item.interjection ? (
-                    <span
-                        className="mb-1 inline-flex items-center rounded-full px-1.5 py-[1px] text-[var(--fs-label)] leading-4"
-                        style={item.interjection === "undelivered" ? { background: `${theme.accent.danger}22`, color: theme.accent.danger } : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
-                    >
-                        {item.interjection === "undelivered" ? "插话未送达" : "插话"}
+                    <span className="mb-1 inline-flex items-center gap-2">
+                        <span
+                            className="inline-flex items-center rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4"
+                            style={item.interjection === "undelivered" ? { background: `${theme.accent.danger}22`, color: theme.accent.danger } : { background: "rgba(255,255,255,0.16)", opacity: 0.72 }}
+                        >
+                            {item.interjection === "undelivered" ? "插话未送达" : item.interjection === "withdrawn" ? "插话已撤回" : item.interjection === "delivered" ? "插话已送达" : "插话 · 等待送达"}
+                        </span>
+                        {item.interjection === "sent" && onWithdrawInterjection ? (
+                            // 只撤回这句插话：不会停止本轮，也不会取消已提交的生成任务。
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-0.5 rounded-full px-2 py-[1px] text-[var(--fs-label)] leading-4 opacity-80 transition-opacity hover:opacity-100 focus-visible:outline focus-visible:outline-1 disabled:cursor-not-allowed disabled:opacity-40"
+                                style={{ background: "rgba(255,255,255,0.12)", color: "inherit" }}
+                                disabled={withdrawing}
+                                title="撤回这句插话，本轮继续运行，已提交的生成任务不受影响"
+                                aria-label="撤回这句插话"
+                                onClick={() => onWithdrawInterjection(item.id)}
+                            >
+                                {withdrawing ? <LoaderCircle className="size-3 animate-spin" /> : <Undo2 className="size-3" />}
+                                撤回
+                            </button>
+                        ) : null}
                     </span>
                 ) : null}
                 {item.role === "assistant" ? (
@@ -583,15 +627,7 @@ function useTypewriterText(targetText: string, shouldAnimate: boolean) {
             // Normal output remains visibly animated. Once stream chunks start
             // outrunning the renderer, increase the batch instead of queuing
             // every code point behind a fixed 16ms delay.
-            const revealCount = pendingCharacters > 384
-                ? pendingCharacters
-                : pendingCharacters > 192
-                    ? 32
-                    : pendingCharacters > 96
-                        ? 16
-                        : pendingCharacters > 24
-                            ? 8
-                            : 3;
+            const revealCount = pendingCharacters > 384 ? pendingCharacters : pendingCharacters > 192 ? 32 : pendingCharacters > 96 ? 16 : pendingCharacters > 24 ? 8 : 3;
             const nextText = targetCharacters.slice(0, currentCharacters.length + revealCount).join("");
             visibleRef.current = nextText;
             setVisibleText(nextText);
@@ -630,7 +666,7 @@ function AgentMessageText({ text, references }: { text: string; references: Canv
                 part.reference ? (
                     <span key={`${part.token}-${index}`} className="agent-message-mention" title={part.reference.title || part.reference.label}>
                         <span aria-hidden="true" className="agent-message-mention-icon">
-                            {part.reference.kind === "skill" ? "✦" : "@"}
+                            {part.reference.kind === "skill" ? <Sparkles className="inline-block size-[1em] align-[-0.125em]" /> : "@"}
                         </span>
                         <span>{part.reference.label}</span>
                     </span>
@@ -677,7 +713,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
             <div className="agent-pending-tool min-w-0 flex-1 rounded-lg border py-2 pl-3 pr-3" style={{ borderColor: "rgba(249,115,22,.22)", background: "rgba(249,115,22,.05)", color: theme.node.text }}>
                 <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold leading-5">
+                        <div className="flex flex-wrap items-center gap-2 text-[var(--fs-ui)] font-semibold leading-5">
                             <span>需要你的确认</span>
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[var(--fs-label)] font-medium" style={{ color: "#f97316", background: "rgba(249,115,22,.1)" }}>
                                 等待确认
@@ -697,7 +733,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                             <ImpactMetric label="生成" value={impact.generationCount} attention={impact.generationCount > 0} theme={theme} />
                         </div>
                         {impact.items.length ? (
-                            <div className="mt-3 space-y-1.5">
+                            <div className="mt-3 space-y-2">
                                 {impact.items.map((item, index) => (
                                     <div key={`${item}-${index}`} className="flex gap-2 text-xs leading-5" style={{ color: theme.node.muted }}>
                                         <span className="mt-2 size-1 shrink-0 rounded-full bg-current" />
@@ -706,7 +742,7 @@ export function AgentPendingToolCard({ summary, detail, theme, onReject, onAppro
                                 ))}
                             </div>
                         ) : null}
-                        {impact.warning ? <div className="mt-3 rounded-md bg-amber-500/[.08] px-2.5 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">{impact.warning}</div> : null}
+                        {impact.warning ? <div className="mt-3 rounded-md bg-amber-500/[.08] px-2 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">{impact.warning}</div> : null}
                     </div>
                 ) : null}
                 {onReject || onApprove ? (
@@ -758,6 +794,8 @@ export function AgentToolCard({
     theme,
     references = [],
     onFocusNode,
+    onUndo,
+    undoStates,
 }: {
     title: string;
     text: string;
@@ -765,6 +803,8 @@ export function AgentToolCard({
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     references?: CanvasResourceReference[];
     onFocusNode?: (nodeId: string) => void;
+    onUndo?: (target: AgentCanvasUndoTarget) => void;
+    undoStates?: Record<string, AgentCanvasUndoState>;
 }) {
     const state = toolCardState(title, text, detail);
     const toolName = agentToolName(title, detail);
@@ -772,6 +812,8 @@ export function AgentToolCard({
     const categoryLabel = agentToolCategoryLabel(toolName, category);
     const summary = friendlyAgentToolSummary(toolName, text, detail);
     const actions = agentCanvasActions(toolName, detail, references);
+    const undoTarget = agentCanvasUndoTarget(detail);
+    const undoState: AgentCanvasUndoState | undefined = objectField(detail, "undoStatus") === "undone" ? { status: "done" } : undoTarget ? undoStates?.[agentCanvasUndoKey(undoTarget)] : undefined;
     const isNodeRead = toolName === "canvas_get_state" && category === "read";
     const [readExpanded, setReadExpanded] = useState(false);
     const visibleActions = actions.slice(0, isNodeRead && !readExpanded ? 1 : 8);
@@ -799,7 +841,7 @@ export function AgentToolCard({
         );
     }
     return (
-        <div data-agent-tool-card className={`agent-tool-row agent-tool-row--${category}${isPlain ? " agent-tool-row--plain" : ""} flex min-w-0 flex-1 items-start gap-2.5 text-left`} style={{ color: theme.node.text }}>
+        <div data-agent-tool-card className={`agent-tool-row agent-tool-row--${category}${isPlain ? " agent-tool-row--plain" : ""} flex min-w-0 flex-1 items-start gap-2 text-left`} style={{ color: theme.node.text }}>
             <span className="agent-tool-status shrink-0" style={{ color: state.color }} aria-hidden="true">
                 {state.icon}
             </span>
@@ -854,6 +896,30 @@ export function AgentToolCard({
                         任务 ID：{String(objectField(objectField(detail, "result"), "taskId"))}
                     </span>
                 ) : null}
+                {undoState?.status === "error" ? (
+                    <span className="mt-1 block text-[var(--fs-label)] text-[var(--status-danger)]" role="alert">
+                        撤销失败：{undoState.error || "请检查画布状态后重试"}
+                    </span>
+                ) : null}
+                {undoState?.status === "done" ? (
+                    <span className="mt-1 block text-[var(--fs-label)] text-[var(--status-success)]" role="status">
+                        此步骤已撤销
+                    </span>
+                ) : null}
+                {undoTarget && onUndo && undoState?.status !== "done" ? (
+                    <Button
+                        type="text"
+                        size="small"
+                        className="mt-1 !h-7 !px-2"
+                        aria-label="撤销本次画布写入"
+                        icon={undoState?.status === "pending" ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : <Undo2 className="size-3.5" />}
+                        loading={undoState?.status === "pending"}
+                        disabled={undoState?.status === "pending"}
+                        onClick={() => onUndo?.(undoTarget)}
+                    >
+                        {undoState?.status === "pending" ? "撤销中" : undoState?.status === "error" ? "重新撤销" : "撤销这一步"}
+                    </Button>
+                ) : null}
             </div>
             {state.label === "已完成" ? <span className="sr-only">已完成</span> : null}
         </div>
@@ -875,12 +941,16 @@ export function AgentOperationFeed({
     theme,
     references = [],
     onFocusNode,
+    onUndo,
+    undoStates,
     live = false,
 }: {
     items: CloudAgentChatMessage[];
     theme: (typeof canvasThemes)[keyof typeof canvasThemes];
     references?: CanvasResourceReference[];
     onFocusNode?: (nodeId: string) => void;
+    onUndo?: (target: AgentCanvasUndoTarget) => void;
+    undoStates?: Record<string, AgentCanvasUndoState>;
     live?: boolean;
 }) {
     const [userExpanded, setUserExpanded] = useState<boolean | null>(null);
@@ -933,7 +1003,7 @@ export function AgentOperationFeed({
             {expanded ? (
                 <div id={listId} className="agent-operation-list">
                     {items.map((item) => (
-                        <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} />
+                        <AgentChatMessage key={item.id} item={item} theme={theme} references={references} onFocusNode={onFocusNode} onUndo={onUndo} undoStates={undoStates} />
                     ))}
                 </div>
             ) : null}
@@ -977,13 +1047,13 @@ export function AgentPlanBar({
             <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left focus-visible:outline focus-visible:outline-2" aria-expanded={!minimized} onClick={onToggle}>
                 <ListChecks className="size-3.5 shrink-0" style={{ color: allDone ? "#429477" : theme.node.muted }} />
                 <span className="text-xs font-semibold">本轮待办</span>
-                <span className="text-[11px] tabular-nums opacity-50">
+                <span className="text-[var(--fs-label)] tabular-nums opacity-50">
                     {doneCount}/{items.length}
                 </span>
-                {waitingUser && !allDone ? <span className="shrink-0 text-[10px] opacity-55">等待你确认后继续</span> : null}
-                {terminal && !allDone ? <span className="shrink-0 text-[10px] opacity-55">本轮已结束，未完成项已停止</span> : null}
+                {waitingUser && !allDone ? <span className="shrink-0 text-[var(--fs-label)] opacity-55">等待你确认后继续</span> : null}
+                {terminal && !allDone ? <span className="shrink-0 text-[var(--fs-label)] opacity-55">本轮已结束，未完成项已停止</span> : null}
                 <span className="min-w-0 flex-1" />
-                <span className="shrink-0 text-[11px] opacity-50">{minimized ? "展开" : "收起"}</span>
+                <span className="shrink-0 text-[var(--fs-label)] opacity-50">{minimized ? "展开" : "收起"}</span>
                 {minimized ? <ChevronDown className="size-3.5 shrink-0 opacity-50" /> : <ChevronUp className="size-3.5 shrink-0 opacity-50" />}
             </button>
             {minimized ? null : (
@@ -993,9 +1063,9 @@ export function AgentPlanBar({
                         const doing = entry.status === "doing";
                         const Icon = done ? CheckCircle2 : terminal ? CircleAlert : doing ? LoaderCircle : CircleDot;
                         return (
-                            <li key={entry.id} className="flex min-w-0 items-start gap-1.5 text-xs">
+                            <li key={entry.id} className="flex min-w-0 items-start gap-2 text-xs">
                                 <Icon
-                                    className={doing && !terminal && !waitingUser ? "mt-[3px] size-3 shrink-0 animate-spin" : "mt-[3px] size-3 shrink-0"}
+                                    className={doing && !terminal && !waitingUser ? "mt-1 size-3 shrink-0 animate-spin" : "mt-1 size-3 shrink-0"}
                                     style={{ color: done ? "#429477" : terminal ? theme.node.muted : doing ? theme.accent.primary : theme.node.muted }}
                                 />
                                 <span className={done ? "min-w-0 break-words line-through opacity-50" : terminal ? "min-w-0 break-words opacity-55" : "min-w-0 break-words"}>{entry.title}</span>
@@ -1008,11 +1078,21 @@ export function AgentPlanBar({
     );
 }
 
+const EMPTY_QUESTION_FIELDS: CloudAgentFormField[] = [];
+
 export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }: { question: CloudAgentUserQuestion; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onAnswer: (answer: string) => void; disabled?: boolean }) {
-    const fields = question.fields || [];
+    const fields = question.fields || EMPTY_QUESTION_FIELDS;
     const isForm = question.kind === "form" || fields.length > 0;
-    const fieldDefaultValue = (field: CloudAgentFormField) => field.defaultValue || field.options?.find((option) => option.recommended)?.id || field.options?.find((option) => option.recommended)?.label || "";
-    const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((field) => [field.id, fieldDefaultValue(field)])));
+    const fieldDefaultValue = (field: CloudAgentFormField): string | string[] => {
+        if (field.defaultValue !== undefined) {
+            if (field.type === "multi_select") return Array.isArray(field.defaultValue) ? field.defaultValue : [field.defaultValue];
+            return Array.isArray(field.defaultValue) ? field.defaultValue[0] || "" : field.defaultValue;
+        }
+        const recommended = field.options?.filter((option) => option.recommended).map((option) => option.id || option.label) || [];
+        if (field.type === "multi_select") return recommended;
+        return recommended[0] || "";
+    };
+    const [values, setValues] = useState<Record<string, string | string[]>>(() => Object.fromEntries(fields.map((field) => [field.id, fieldDefaultValue(field)])));
     const [customFields, setCustomFields] = useState<Record<string, boolean>>({});
     const [additionalNotes, setAdditionalNotes] = useState("");
     const [validation, setValidation] = useState("");
@@ -1025,16 +1105,28 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
     }, [question.questionId, fields]);
 
     const submitForm = (useDefaults = false) => {
-        const answers = useDefaults ? Object.fromEntries(fields.map((field) => [field.id, field.defaultValue || ""])) : values;
-        const missing = fields.find((field) => (field.required && !String(answers[field.id] || "").trim()) || (field.required && answers[field.id] === "other"));
+        const answers = useDefaults ? Object.fromEntries(fields.map((field) => [field.id, fieldDefaultValue(field)])) : values;
+        const missing = fields.find((field) => {
+            const value = answers[field.id];
+            const empty = Array.isArray(value) ? value.length === 0 : !String(value || "").trim();
+            return field.required && (empty || value === "other");
+        });
         if (missing) {
             setValidation(`请填写“${missing.title}”`);
             return;
         }
         setValidation("");
-        const displayAnswers: Record<string, string> = {};
+        const displayAnswers: Record<string, string | string[]> = {};
         for (const field of fields) {
-            const value = String(answers[field.id] || "").trim();
+            const rawValue = answers[field.id];
+            if (Array.isArray(rawValue)) {
+                const selected = rawValue.map((value) => String(value).trim()).filter(Boolean);
+                if (selected.length) {
+                    displayAnswers[field.id] = selected.map((value) => field.options?.find((item) => (item.id || item.label) === value)?.label || value);
+                }
+                continue;
+            }
+            const value = String(rawValue || "").trim();
             if (!value || value === "other") continue;
             const option = field.options?.find((item) => (item.id || item.label) === value);
             displayAnswers[field.id] = option?.label || value;
@@ -1058,19 +1150,23 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
         event.stopPropagation();
     };
     const updateValue = (field: CloudAgentFormField, value: string) => {
-        setValues((current) => ({ ...current, [field.id]: value }));
+        setValues((current) => {
+            if (field.type !== "multi_select") return { ...current, [field.id]: value };
+            const selected = Array.isArray(current[field.id]) ? (current[field.id] as string[]) : [];
+            return { ...current, [field.id]: selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value] };
+        });
         if (field.allowCustom && value === "other") setCustomFields((current) => ({ ...current, [field.id]: true }));
     };
 
     if (isForm) {
         return (
             <div className="agent-question-bar agent-question-form mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
-                <div className="flex items-start gap-2 px-3 pt-2.5">
+                <div className="flex items-start gap-2 px-3 pt-2">
                     <HelpCircle className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 text-[10px] opacity-55">{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : "需求确认"}</div>
+                        <div className="flex items-center gap-2 text-[var(--fs-label)] opacity-55">{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : "需求确认"}</div>
                         <div className="text-xs font-semibold leading-5">{question.question}</div>
-                        <div className="mt-0.5 text-[10px] opacity-50">已填入推荐值，可按需修改；不重要的字段可以留空。</div>
+                        <div className="mt-0.5 text-[var(--fs-label)] opacity-50">已填入推荐值，可按需修改；不重要的字段可以留空。</div>
                     </div>
                 </div>
                 <div className="agent-question-fields px-3 py-2">
@@ -1108,10 +1204,11 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                                             onPointerDown={stop}
                                         />
                                     ) : (
-                                        <div className="agent-question-options" role="radiogroup" aria-label={field.title}>
+                                        <div className="agent-question-options" role={field.type === "multi_select" ? "group" : "radiogroup"} aria-label={field.title}>
                                             {options.map((option) => {
                                                 const optionId = option.id || option.label;
-                                                const selected = values[field.id] === optionId;
+                                                const selectedValues = values[field.id];
+                                                const selected = field.type === "multi_select" ? Array.isArray(selectedValues) && selectedValues.includes(optionId) : selectedValues === optionId;
                                                 return (
                                                     <button
                                                         key={optionId}
@@ -1139,7 +1236,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                                             value={custom && values[field.id] !== "other" ? values[field.id] || "" : ""}
                                             placeholder={field.placeholder || "输入自定义内容"}
                                             disabled={disabled}
-                                            className="agent-question-input mt-1.5"
+                                            className="agent-question-input mt-2"
                                             onChange={(event) => updateValue(field, event.target.value)}
                                             onMouseDown={stop}
                                             onPointerDown={stop}
@@ -1151,7 +1248,9 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                     })}
                 </div>
                 <div className="agent-question-field px-3 pb-2">
-                    <label className="agent-question-field-label" htmlFor="agent-question-additional-notes">补充说明</label>
+                    <label className="agent-question-field-label" htmlFor="agent-question-additional-notes">
+                        补充说明
+                    </label>
                     <textarea
                         id="agent-question-additional-notes"
                         rows={2}
@@ -1164,8 +1263,8 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                         onPointerDown={stop}
                     />
                 </div>
-                {validation ? <div className="agent-question-validation px-3 pb-1 text-[10px]">{validation}</div> : null}
-                <div className="agent-question-actions px-3 pb-2.5">
+                {validation ? <div className="agent-question-validation px-3 pb-1 text-[var(--fs-label)]">{validation}</div> : null}
+                <div className="agent-question-actions px-3 pb-2">
                     <button
                         type="button"
                         disabled={disabled}
@@ -1200,10 +1299,10 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
 
     return (
         <div className="agent-question-bar mx-3 mb-2 overflow-hidden rounded-xl" style={{ color: theme.node.text }}>
-            <div className="flex items-start gap-2 px-3 pt-2.5">
+            <div className="flex items-start gap-2 px-3 pt-2">
                 <HelpCircle className="mt-[1px] size-3.5 shrink-0" style={{ color: theme.accent.primary }} />
                 <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 text-[10px] opacity-55">{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : "需要确认"}</div>
+                    <div className="flex items-center gap-2 text-[var(--fs-label)] opacity-55">{question.round && question.maxRounds ? `确认 ${question.round}/${question.maxRounds}` : "需要确认"}</div>
                     <div className="text-xs font-semibold leading-5">{question.question}</div>
                 </div>
             </div>
@@ -1214,7 +1313,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                         type="button"
                         disabled={disabled}
                         title={option.detail || option.label}
-                        className="agent-question-choice max-w-full rounded-md border-0 px-3 py-1.5 text-left text-xs transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="agent-question-choice max-w-full rounded-md border-0 px-3 py-2 text-left text-xs transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
                         style={{ background: theme.toolbar.itemHover }}
                         onMouseDown={stop}
                         onPointerDown={stop}
@@ -1224,14 +1323,14 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                         }}
                     >
                         <span className="block break-words font-medium">{option.label}</span>
-                        {option.detail ? <span className="mt-0.5 block break-words text-[10px] leading-4 opacity-60">{option.detail}</span> : null}
+                        {option.detail ? <span className="mt-0.5 block break-words text-[var(--fs-label)] leading-4 opacity-60">{option.detail}</span> : null}
                     </button>
                 ))}
                 <button
                     type="button"
                     disabled={disabled}
                     title="使用安全默认方案继续"
-                    className="agent-question-default max-w-full rounded-md border-0 px-3 py-1.5 text-left text-xs font-medium transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="agent-question-default max-w-full rounded-md border-0 px-3 py-2 text-left text-xs font-medium transition focus-visible:outline focus-visible:outline-2 disabled:cursor-not-allowed disabled:opacity-50"
                     style={{ background: theme.accent.primary, color: theme.accent.onPrimary }}
                     onMouseDown={stop}
                     onPointerDown={stop}
@@ -1243,7 +1342,7 @@ export function AgentQuestionBar({ question, theme, onAnswer, disabled = false }
                     按默认方案开始
                 </button>
             </div>
-            <div className="px-3 pb-2 text-[10px] opacity-50">{question.allowFreeform === false ? "请从上面选一项。" : "也可以在下方输入框里补充说明。"}</div>
+            <div className="px-3 pb-2 text-[var(--fs-label)] opacity-50">{question.allowFreeform === false ? "请从上面选一项。" : "也可以在下方输入框里补充说明。"}</div>
         </div>
     );
 }
@@ -1271,7 +1370,7 @@ export function AgentPanelTabs<T extends string>({
                             type="button"
                             role="tab"
                             aria-selected={value === item.value}
-                            className={`inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-1.5 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`}
+                            className={`inline-flex h-7 min-w-0 items-center justify-center gap-1 rounded-md px-2 transition-colors ${value === item.value ? "font-medium" : "font-normal"}`}
                             style={{ background: value === item.value ? theme.node.fill : "transparent", color: value === item.value ? theme.node.text : theme.node.muted, boxShadow: value === item.value ? `0 2px 8px ${theme.spatial.shadow}` : "none" }}
                             onClick={() => onChange(item.value)}
                         >
@@ -1307,10 +1406,10 @@ function AgentMessageAttachments({ attachments }: { attachments: CloudAgentChatA
     const [preview, setPreview] = useState<CloudAgentChatAttachment | null>(null);
     return (
         <>
-            <div className="mt-2 grid grid-cols-3 gap-1.5">
+            <div className="mt-2 grid grid-cols-3 gap-2">
                 {attachments.map((item) => (
                     <button key={item.id} type="button" className="group relative overflow-hidden rounded-lg" onClick={() => setPreview(item)} onDoubleClick={() => setPreview(item)} aria-label={`查看图片 ${item.name}`}>
-                        <img src={item.url} alt={item.name} className="aspect-square w-full object-cover transition-transform group-hover:scale-105" />
+                        <img src={item.url} alt={item.name} className="aspect-square w-full object-cover transition-opacity duration-150 group-hover:opacity-90" />
                     </button>
                 ))}
             </div>

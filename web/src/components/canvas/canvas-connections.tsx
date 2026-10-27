@@ -1,19 +1,23 @@
 import React, { useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from "react";
 
 import { DEFAULT_CANVAS_CONNECTION_STYLE, type CanvasConnectionStyle } from "@/lib/canvas/canvas-appearance";
-import { canvasThemes } from "@/lib/canvas-theme";
+import { CANVAS_CONNECTION_STROKE_WIDTH, canvasThemes } from "@/lib/canvas-theme";
 import { useActiveTheme } from "@/stores/canvas/use-canvas-theme-store";
 import { STORYBOARD_HEADER_HEIGHT, STORYBOARD_ROW_HEIGHT, storyboardTableHeight } from "@/lib/canvas/canvas-storyboard-layout";
 import { batchReferenceHandleY } from "@/lib/canvas/canvas-batch-table";
+import { batchCellAnchor, parseBatchCellHandle, type BatchScroll } from "@/lib/canvas/canvas-batch-references";
 import type { CanvasConnection, CanvasNodeData, ConnectionHandle, Position } from "@/types/canvas";
+import { useCanvasVisualNode } from "./canvas-node-resize-motion";
 
 export const ConnectionPath = React.memo(function ConnectionPath({
     connection,
-    from,
-    to,
+    from: sourceFrom,
+    to: sourceTo,
     fromScrollTop = 0,
     toScrollTop = 0,
+    fromBatchScroll,
+    toBatchScroll,
     active,
     connectionStyle = DEFAULT_CANVAS_CONNECTION_STYLE,
     visualMode = "full",
@@ -26,6 +30,8 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     to: CanvasNodeData;
     fromScrollTop?: number;
     toScrollTop?: number;
+    fromBatchScroll?: BatchScroll;
+    toBatchScroll?: BatchScroll;
     active: boolean;
     connectionStyle?: CanvasConnectionStyle;
     visualMode?: "full" | "hover-only";
@@ -34,20 +40,24 @@ export const ConnectionPath = React.memo(function ConnectionPath({
     onContextMenu?: (event: ReactMouseEvent<SVGPathElement>) => void;
 }) {
     const theme = canvasThemes[useActiveTheme()];
+    const from = useCanvasVisualNode(sourceFrom);
+    const to = useCanvasVisualNode(sourceTo);
     const [hovered, setHovered] = useState(false);
-    const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop);
+    const { pathD, startX, startY, endX, endY } = canvasConnectionPath(connection, from, to, fromScrollTop, toScrollTop, fromBatchScroll, toBatchScroll);
+    const targetCell = batchCellAnchor(to, connection.toHandleId, toBatchScroll);
     const emphasized = active || hovered;
     const showVisual = !hideVisual && (visualMode === "full" || emphasized);
     const showEmphasis = !hideVisual && emphasized;
-    const showFlow = showEmphasis && (visualMode === "full" || hovered || active);
     const connectionOpacity = connectionStyle.opacity / 100;
     const mainStrokeWidth = emphasized ? Math.max(connectionStyle.width * 1.4, connectionStyle.width + 0.8) : connectionStyle.width;
     const underlayStrokeWidth = emphasized ? connectionStyle.width + 3 : connectionStyle.width + 1.5;
     const flowStrokeWidth = Math.max(1, connectionStyle.width * 1.1);
     const mainStrokeOpacity = emphasized ? Math.max(connectionOpacity, 0.92) : connectionOpacity;
-
+    if (!pathD) return null;
     return (
         <g>
+            {targetCell ? <title>{targetCell.label}{targetCell.clipped ? "（位于表格滚动区域外）" : ""}</title> : null}
+            {targetCell?.clipped && !hideVisual && emphasized ? <text x={endX + 8} y={endY - 8} fill={theme.node.text} fontSize={12} style={{ pointerEvents: "none" }}>{targetCell.label} · 滚动查看</text> : null}
             <path
                 data-connection-id={connection.id}
                 d={pathD}
@@ -94,45 +104,64 @@ export const ConnectionPath = React.memo(function ConnectionPath({
                 <circle cx={startX} cy={startY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.node.text : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
                 <circle cx={endX} cy={endY} r={emphasized ? 3.5 : 2.5} fill={emphasized ? theme.node.text : theme.node.muted} fillOpacity={emphasized ? Math.max(connectionOpacity, 0.9) : connectionOpacity * 0.9} vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
             </> : null}
-            {showFlow ? <path
-                className="canvas-connection-flow"
-                d={pathD}
-                stroke={theme.node.text}
-                strokeWidth={flowStrokeWidth}
-                vectorEffect="non-scaling-stroke"
-                strokeOpacity={Math.max(0.6, connectionOpacity)}
-                strokeDasharray="8 7"
-                fill="none"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                style={{ pointerEvents: "none" }}
-            /> : null}
+            {showEmphasis ? <CanvasConnectionBeam pathD={pathD} color={theme.connection.beam} /> : null}
         </g>
     );
 }, (previous, next) => previous.connection === next.connection && previous.from === next.from && previous.to === next.to && previous.active === next.active && previous.connectionStyle === next.connectionStyle && previous.visualMode === next.visualMode && previous.hideVisual === next.hideVisual && previous.fromScrollTop === next.fromScrollTop && previous.toScrollTop === next.toScrollTop);
 
-export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0) {
-    const startX = from.position.x + from.width;
-    const startY = connectionHandleY(from, connection.fromHandleId, fromScrollTop);
-    const endX = to.position.x;
-    const endY = connectionHandleY(to, connection.toHandleId, toScrollTop);
+const BEAM_LAYERS = [0.35, 0.6, 0.9, 1.2, CANVAS_CONNECTION_STROKE_WIDTH, 1.65, 1.9, 2.1].map((width, index) => ({
+    length: 36 - index * 4,
+    offset: -index * 4,
+    width,
+    opacity: 0.14 + index * 0.07,
+}));
+
+export function CanvasConnectionBeam({ pathD, color }: { pathD: string; color: string }) {
+    // 前缘对齐，靠近头部的短层逐渐加宽、加深，形成圆头细尾的水滴轮廓。
+    // 各层都沿原曲线行进，转弯时尾部自然贴线，底线宽度不受影响。
+    // 统一周期为路径的三分之一，循环无跳帧；动画由 CSS 驱动，不逐帧更新 React。
+    return <g data-connection-beam aria-hidden="true" style={{ pointerEvents: "none" }}>
+        {BEAM_LAYERS.map(({ length, offset, width, opacity }) => <path
+            key={length}
+            className="canvas-connection-comet"
+            d={pathD}
+            pathLength={300}
+            stroke={color}
+            strokeWidth={width}
+            strokeOpacity={opacity}
+            strokeDasharray={`${length} ${100 - length}`}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            fill="none"
+            style={{ "--canvas-beam-offset": `${offset}px`, strokeWidth: `calc(${width}px / var(--canvas-committed-scale, 1))` } as CSSProperties}
+        />)}
+    </g>;
+}
+
+export function canvasConnectionPath(connection: CanvasConnection, from: CanvasNodeData, to: CanvasNodeData, fromScrollTop = 0, toScrollTop = 0, fromBatchScroll?: BatchScroll, toBatchScroll?: BatchScroll) {
+    const fromCell = batchCellAnchor(from, connection.fromHandleId, fromBatchScroll);
+    const toCell = batchCellAnchor(to, connection.toHandleId, toBatchScroll);
+    if ((parseBatchCellHandle(connection.fromHandleId) && !fromCell) || (parseBatchCellHandle(connection.toHandleId) && !toCell)) return { pathD: "", startX: 0, startY: 0, endX: 0, endY: 0 };
+    const startX = fromCell?.x ?? from.position.x + from.width;
+    const startY = fromCell?.y ?? connectionHandleY(from, connection.fromHandleId, fromScrollTop);
+    const endX = toCell?.x ?? to.position.x;
+    const endY = toCell?.y ?? connectionHandleY(to, connection.toHandleId, toScrollTop);
     const dx = Math.abs(endX - startX);
     const curvature = Math.max(dx * 0.5, 50);
     return { pathD: `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`, startX, startY, endX, endY };
 }
 
-export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, target?: CanvasNodeData, nodeScrollTop = 0) {
+export function activeConnectionPath(node: CanvasNodeData | undefined, handle: ConnectionHandle, mouseWorld: Position, nodeScrollTop = 0, nodeBatchScroll?: BatchScroll) {
     if (!node) return "";
+    const nodeCell = batchCellAnchor(node, handle.handleId, nodeBatchScroll);
+    if (parseBatchCellHandle(handle.handleId) && !nodeCell) return "";
     const startX = handle.handleType === "source" ? node.position.x + node.width : mouseWorld.x;
     const startY = handle.handleType === "source" ? connectionHandleY(node, handle.handleId, nodeScrollTop) : mouseWorld.y;
-    const endX = handle.handleType === "source" ? mouseWorld.x : node.position.x;
-    const endY = handle.handleType === "source" ? mouseWorld.y : connectionHandleY(node, handle.handleId, nodeScrollTop);
-    const snappedStartX = handle.handleType === "target" && target ? target.position.x + target.width : startX;
-    const snappedStartY = handle.handleType === "target" && target ? connectionHandleY(target) : startY;
-    const snappedEndX = handle.handleType === "source" && target ? target.position.x : endX;
-    const snappedEndY = handle.handleType === "source" && target ? connectionHandleY(target) : endY;
-    const distance = Math.abs(snappedEndX - snappedStartX);
-    return `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
+    const endX = handle.handleType === "source" ? mouseWorld.x : nodeCell?.x ?? node.position.x;
+    const endY = handle.handleType === "source" ? mouseWorld.y : nodeCell?.y ?? connectionHandleY(node, handle.handleId, nodeScrollTop);
+    // 悬停目标由卡片反馈；松手前的自由端始终跟随指针。
+    const distance = Math.abs(endX - startX);
+    return `M ${startX} ${startY} C ${startX + distance * 0.5} ${startY}, ${endX - distance * 0.5} ${endY}, ${endX} ${endY}`;
 }
 
 /**
